@@ -37,7 +37,7 @@ class _custom_LogisticReg(BaseEstimator):
         self.n_classes = n_classes
             ## output dimension
         self.penalty_class = penalty_class
-            ## the class of required penalty function, not an instant
+            ## the class of required penalty function, not an instance
         self.penalty_param = penalty_param
             ## this can be anything, like- scalar,array,list etc.
              ## design your custom penalty accordingly , in terms of a single tuning parameter.
