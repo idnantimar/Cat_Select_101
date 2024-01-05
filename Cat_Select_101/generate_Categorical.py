@@ -175,21 +175,34 @@ def simulate_X(index=range(100),n_col=(5,0),*,
 
 ##> ............................................................
 
-def _softmax(x,B):
-    """
-        *  return multinomial probabilities at observation x of shape (n_features,)
-           or over a dataset of shape (n_samples,n_features)
 
-        *  B is of the shape (n_classes,n_features) , the coefficients of the model
-
-        Note: for each observation , returned probabilities sum to 1.
+def _softmax(X,coef,intercept):
     """
-    Bx = np.matmul(B,x.T)
+    Computes multinomial probabilities at each observation, over a dataset.
+
+    Parameters
+    ----------
+    X : array of shape (n_samples,n_features)
+        The training input samples.
+    coef : array of shape (n_classes,n_features)
+        The coefficients of the model.
+    intercept : array of shape (n_classes,)
+        The intercept terms. Put ``np.zeros((n_classes,))`` for no-intercept model.
+
+    Returns
+    -------
+    array of shape (n_samples,n_classes)
+        The softmax probabilities for each observation.
+
+    Note: for each row , returned probabilities sum to 1.
+
+    """
+    Bx = np.matmul(X,coef.T)
+    Bx += intercept
     exp_Bx = np.exp(Bx - np.max(Bx,axis=None))
-    out = exp_Bx / exp_Bx.sum(axis=0,keepdims=True)
-        ## after x.T each column is an observation,
-         ## we want to convert it back as rows
-    return out.T
+    Probs = exp_Bx / exp_Bx.sum(axis=1,keepdims=True)
+    return Probs
+
 
 #> .............................................................
 
