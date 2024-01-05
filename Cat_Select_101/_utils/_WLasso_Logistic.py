@@ -31,6 +31,44 @@ import numpy as np
 
 
 
+
+##> ............................................................
+
+def _neg_l_multinomial(X,y,W,b,reduce=np.mean):
+    """
+    The unpenalized loss function in Logistic Regression.
+
+    Parameters
+    ----------
+    X : array of shape (n_samples,n_features)
+        The training input samples.
+    y : array of shape (n_samples,n_classes)
+        The dummy encoded target values.
+    W : array of shape (n_classes,n_features)
+        The model coefficients.
+    b : array of shape (n_classes,)
+        The bias terms.
+    reduce : default ``np.mean``
+        How to combine losses from individual observations.
+
+    Returns
+    -------
+    float
+        -ve log-likelihood of data.
+
+    """
+    Wx = np.matmul(X,W.T)
+    Wx += b
+    exp_Wx = np.exp(Wx - np.max(Wx,axis=None))
+    probs = exp_Wx / exp_Wx.sum(axis=1,keepdims=True)
+    logpmf = np.sum(y*np.log(probs),axis=1)
+    return -1*reduce(logpmf)
+
+
+#> .............................................................
+
+
+
 class _WLasso_Logistic(BaseEstimator):
     """
         In Weighted Lasso , instead of simply taking 'l1'-norm of model `coef_` as penalty,
