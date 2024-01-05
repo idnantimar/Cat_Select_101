@@ -96,7 +96,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         self.C_ = self.estimator.C_
         self.Cs_ = self.estimator.Cs_
         self.reduce_norm = reduce_norm
-        self.feature_importances_ = self._coef_to_importance(self.reduce_norm,
+        self.feature_importances_ = self._coef_to_importance(self.coef_,self.reduce_norm,
                                                              identifiability=False)
         return self
 
@@ -150,11 +150,11 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         if (self.true_coef.dtype==bool) :
             self.true_support = self.true_coef
         else :
-            true_support = np.linalg.norm(self.true_coef.reshape(-1,self.n_features_in_),
-                                          ord=self.reduce_norm,axis=0)
+            true_support = self._coef_to_importance(self.true_coef.reshape((-1,self.n_features_in_)),
+                                                    self.reduce_norm,
+                                                    identifiability=False)
             self.true_support = (true_support > self.threshold_)
         return super().get_error_rates(plot=plot)
-
 
 
 
