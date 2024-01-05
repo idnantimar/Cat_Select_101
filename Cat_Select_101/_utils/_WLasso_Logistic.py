@@ -95,10 +95,13 @@ class _WLasso_Logistic(BaseEstimator):
         history_ : dict
             {'penalized_loss': array of shape (`itr_`,) ; The penalized loss in each iteration ,
 
+             'Cs': array of shape (`itr_`,) ; The regularization strength used in each iteration.
+             If the last entry is -ve it indicates termination ,
+
              'penalty': array of shape (`itr_`,) ; The penalty in each iteration ,
 
-             'Cs': array of shape (`itr_`,) ; The regularization strength used in each iteration.
-             If the last entry is -ve it indicates termination }
+             'loss': array of shape (`itr_`,) ; The unpenalized loss in each iteration
+             }
 
         itr_ : int
             Number of iterations, including the initial iteration.
@@ -144,7 +147,7 @@ class _WLasso_Logistic(BaseEstimator):
         #   ------------------------
         itr = 0
         ## initializing all coef_ at 0 .....
-        current_state = np.zeros_like(penalty_weights,order='C',dtype=float)
+        current_state = np.ones_like(penalty_weights,order='C',dtype=float)
         initial_loss = loss_fun(current_state)
         initial_penalty = 0.
         if compute_path :
@@ -245,8 +248,9 @@ class _WLasso_Logistic(BaseEstimator):
         ### Outputs
         #   -------
         self.history_ = {'penalized loss': penalized_loss_history[:itr],
+                         'Cs':Cs[:itr],
                          'penalty':penalty_history[:itr],
-                         'Cs':Cs[:itr]}
+                         'loss': penalized_loss_history[:itr] - Cs[:itr]*penalty_history[:itr]}
         self.itr_ = itr
         return current_state
 
