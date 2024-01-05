@@ -84,30 +84,37 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 
-    def _coef_to_importance(self,reduce_norm=1,*,identifiability=False):
+    def _coef_to_importance(self,coef,reduce_norm=1,*,identifiability=False):
         """
-        Computes `feature_importances_` based on `coef_`.
+        Computes `feature_importances_` based on `coef`.
 
         Parameters
         ----------
+        coef : the fitted `coef_` or true coefficients of the model.
+
         reduce_norm : non-zero int, inf, -inf ; default 1
-            Order of the norm used to compute `feature_importances_` in the case where the `coef_`
+            Order of the norm used to compute `feature_importances_` in the case where the `coef`
             is of dimension 2. By default 'l1'-norm is being used.
 
         identifiability : bool ; default False
-            Whether the estimated ``coef_`` are all identifiable or not. If ``coef_``
-            is of shape (``n_classes_``,``n_featuress_in_``) set False, set True when
-            ``coef_`` is of shape (``n_classes_-1``,``n_featuress_in_``).
+            Whether the `coef` are all identifiable or not. If `coef`
+            is of shape (`n_classes_`,`n_featuress_in_`) set False, set True when
+            there is already some baseline category, i.e. `coef` is of shape (`n_classes_-1`,`n_featuress_in_`).
 
         Returns
         -------
-        1-D array of shape (``n_featuress_in_``,)
+        1-D array of shape (`n_featuress_in_`,)
 
         """
-        coef = self.coef_
         if not identifiability :
-            coef = coef[:-1] - coef[-1]
-        return np.linalg.norm(coef,ord=reduce_norm,axis=0)
+            k,m = coef.shape
+            out = np.zeros((m,))
+            for row in coef:
+                out += np.linalg.norm(coef-row,ord=reduce_norm,axis=0)
+            out /= k
+        else :
+            out = np.linalg.norm(coef,ord=reduce_norm,axis=0)
+        return out
 
 
 
@@ -117,7 +124,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
         Returns
         -------
-        support : boolean array of shape (``n_features_in_``,)
+        support : boolean array of shape (`n_features_in_`,)
             An element is True iff its corresponding feature is selected for
             retention.
 
