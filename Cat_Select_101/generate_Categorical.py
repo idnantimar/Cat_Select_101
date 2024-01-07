@@ -175,10 +175,9 @@ def simulate_X(index=range(100),n_col=(5,0),*,
 
 ##> ............................................................
 
-
 def _softmax(X,coef,intercept):
     """
-    Computes multinomial probabilities at each observation, over a dataset.
+    Computes multinomial probabilities at each observation, over a dataset
 
     Parameters
     ----------
@@ -199,8 +198,8 @@ def _softmax(X,coef,intercept):
     """
     Bx = np.matmul(X,coef.T)
     Bx += intercept
-    exp_Bx = np.exp(Bx - np.max(Bx,axis=None))
-    Probs = exp_Bx / exp_Bx.sum(axis=1,keepdims=True)
+    exp_Bx = np.exp(Bx - np.max(Bx,axis=-1,keepdims=True))
+    Probs = exp_Bx / exp_Bx.sum(axis=-1,keepdims=True)
     return Probs
 
 
@@ -267,7 +266,7 @@ def simulate_catY(X,Beta_coeffs,*,
     if use_intercept is None : use_intercept = np.zeros((1,k))
     Bx += use_intercept
     ## softmax transformation .....
-    exp_Bx = np.exp(Bx - np.max(Bx,axis=None))
+    exp_Bx = np.exp(Bx - np.max(Bx,axis=1,keepdims=True))
     Probs = exp_Bx / exp_Bx.sum(axis=1,keepdims=True)
     ## simulating Y .....
     Y = generator.multinomial(1,Probs).argmax(axis=1)
