@@ -47,7 +47,7 @@ class custom_penalty(keras.regularizers.Regularizer):
         self.penalty_param = penalty_param
         self.dtype = dtype
     def __call__(self,coef):
-        return tf.reduce_sum(tf.abs(coef))*self.penalty_param#tf.constant(0,dtype=self.dtype)
+        return tf.constant(0,dtype=self.dtype)
     def get_config(self):
         return {'penalty_param':self.penalty_param}
 
