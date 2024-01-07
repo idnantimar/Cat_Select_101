@@ -118,6 +118,49 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 
+    def _lofo_importance(self,test_data,zero_tol=1e-16):
+        """
+        This function calculates 'leave one feature out' based feature importances, assuming
+        there are two attributes `coef_` and `intercept_`.
+
+        Key Idea : Fit a model based on all features, then every time set one feature as 0
+        and evaluate the log-likelihood based on new data and full-model based coefficients.
+        The more important a feature is, the larger will be the drop in log-likelihood compared to full model.
+
+        [ Note: Calling this function will override the `coef_` based `feature_importances_` ]
+
+        Parameters
+        ----------
+        test_data : tuple (X_full,y)
+            X_full input samples, shape (n_samples,n_features)
+            y target values, shape (n_samples,n_classes)
+
+        zero_tol : float ; default 1e-16
+            A very small number, used for avoiding ``ZeroDivisionError``.
+
+        """
+        X_full,y = test_data
+        n,m = X_full.shape
+        ## log-likelihood function ...
+        def log_likelihood(X):
+            Wx = np.matmul(X,self.coef_.T) + self.intercept_
+            exp_Wx = np.exp(Wx - np.max(Wx,axis=1,keepdims=True))
+            probs = exp_Wx / exp_Wx.sum(axis=1,keepdims=True)
+            L = np.where(y,probs,1) + np.where(probs>zero_tol,probs,zero_tol)
+            return np.sum(np.log(L),axis=None)
+        ## full score ...
+        scores = np.full(fill_value=log_likelihood(X_full),
+                         shape=(m,))
+        ## lofo scores ...
+        for j in range(m):
+            X_current = X_full.copy()
+            X_current[:,j] = 0
+            scores[j] -= log_likelihood(X_current)
+        ## feature importances ...
+        self.feature_importances_ = scores/n
+
+
+
     def _get_support_mask(self):
         """
         Get the boolean mask indicating which features are selected.
@@ -175,7 +218,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         kind, ax, xlabel, ylabel, title, rot, color, **kwargs : keyword arguments to pass to matplotlib plotting method.
 
         """
-        if not hasattr(self,'threshold_') : self.get_support()
+        self.get_support()
         if self.feature_names_in_ is None :
             ix = (np.vectorize(lambda j:"X_"+str(j)))(range(self.n_features_in_))
         else : ix = self.feature_names_in_
