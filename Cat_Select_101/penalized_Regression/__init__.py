@@ -47,7 +47,7 @@ class custom_penalty(keras.regularizers.Regularizer):
         self.penalty_param = penalty_param
         self.dtype = dtype
     def __call__(self,coef):
-        return tf.constant(0,dtype=self.dtype)
+        return tf.reduce_sum(tf.abs(coef))*self.penalty_param#tf.constant(0,dtype=self.dtype)
     def get_config(self):
         return {'penalty_param':self.penalty_param}
 
@@ -130,6 +130,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
             >>> Model.fit(X,y,...) # fitting for the first time with required parameters
             >>> Model.estimator.fit(X,pd.get_dummies(y)) # resuming previous run
+            >>> Model.update_importance() # update feature_importances_
 
         Parameters
         ----------
@@ -237,8 +238,19 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
         self.coef_ = (self.estimator.weights[0]).numpy().T
         self.reduce_norm = reduce_norm
-        self.feature_importances_ = self._coef_to_importance(reduce_norm,identifiability=False)
+        self.feature_importances_ = self._coef_to_importance(self.coef_,
+                                                             reduce_norm,identifiability=False)
         return self
+
+
+    def update_importance(self):
+        """
+        After resuming an existing training run update `feature_importances_`
+        based on updated `coef_`
+        """
+        self.coef_ = (self.estimator.weights[0]).numpy().T
+        self.feature_importances_ = self._coef_to_importance(self.coef_,
+                                                             self.reduce_norm,identifiability=False)
 
 
     def transform(self,X):
@@ -290,8 +302,9 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         if (self.true_coef.dtype==bool) :
             self.true_support = self.true_coef
         else :
-            true_support = np.linalg.norm(self.true_coef.reshape(-1,self.n_features_in_),
-                                          ord=self.reduce_norm,axis=0)
+            true_support = self._coef_to_importance(self.true_coef.reshape((-1,self.n_features_in_)),
+                                                    self.reduce_norm,
+                                                    identifiability=False)
             self.true_support = (true_support > self.threshold_)
         return super().get_error_rates(plot=plot)
 
