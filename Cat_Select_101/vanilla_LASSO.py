@@ -93,12 +93,41 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         self.estimator.fit(X,y)
         warnings.filterwarnings("default", category=ConvergenceWarning)
         self.coef_ = self.estimator.coef_
+        self.intercept_ = self.estimator.intercept_
         self.C_ = self.estimator.C_
         self.Cs_ = self.estimator.Cs_
         self.reduce_norm = reduce_norm
         self.feature_importances_ = self._coef_to_importance(self.coef_,self.reduce_norm,
                                                              identifiability=False)
+        self.training_data = (X.to_numpy(),pd.get_dummies(y,dtype=int).to_numpy())
         return self
+
+
+    def get_lofo_importances(self,test_data=(None,None),*,zero_tol=1e-16):
+        """
+        Key Idea : Fit a model based on all features, then every time set one feature as 0
+        and evaluate the log-likelihood based on new data and full-model based coefficients.
+        The more important a feature is, the larger will be the drop in log-likelihood compared to full model.
+
+        Parameters
+        ----------
+        test_data : tuple (X_test,y_test) ; default (None,None)
+            The test data, on which log-likelihood will be evaluated.
+            X_test is DataFrame of shape (n_samples,n_features) , y_test is Series of shape (n_samples,).
+            If None, models will be evaluated on training data.
+
+        zero_tol : float ; default 1e-16
+            A very small number. To avoid ``ZeroDivisionError``, any predicted probability smaller than this value
+            for an observed class will be replaced by this value.
+
+
+        [ Note: Calling this function will override the `coef_` based `feature_importances_` ]
+
+        """
+        X_full,y_dummy = test_data
+        X_full = self.training_data[0] if (X_full is None) else pd.get_dummies(X_full,drop_first=True,dtype=int).to_numpy()
+        y_dummy = self.training_data[1] if (y_dummy is None) else pd.get_dummies(y_dummy,dtype=int).to_numpy()
+        super()._lofo_importance((X_full,y_dummy),zero_tol=zero_tol)
 
 
     def transform(self,X):
