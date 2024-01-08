@@ -107,13 +107,16 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
         """
         if not identifiability :
+        ## taking average over possible base-line categories ...
             k,m = coef.shape
             out = np.zeros((m,))
             for row in coef:
                 out += np.linalg.norm(coef-row,ord=reduce_norm,axis=0)
             out /= k
         else :
+        ## base-line category already specified ...
             out = np.linalg.norm(coef,ord=reduce_norm,axis=0)
+        ## feature importances ...
         return out
 
 
