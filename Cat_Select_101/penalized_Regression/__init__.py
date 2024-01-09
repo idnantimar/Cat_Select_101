@@ -118,7 +118,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             validation_split=0,validation_freq=1,validation_data=None,
             cv=None,n_jobs=None,
             reduce_norm=1,
-            initial_guess = LogisticRegression(penalty=None,multi_class='multinomial',
+            initial_guess = LogisticRegression(penalty='l2',multi_class='multinomial',
                                                solver='lbfgs',tol=1e-2),
             compile_configuration={'optimizer':'adam','metrics':['accuracy']},
             **fit_params):
@@ -176,7 +176,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
             underlying Logistic Regression is of dimension 2. By default 'l1'-norm is being used.
 
-        initial_guess : default ``LogisticRegression(penalty=None,multi_class='multinomial',solver='lbfgs',tol=1e-2)``
+        initial_guess : default ``LogisticRegression(penalty='l2',multi_class='multinomial',solver='lbfgs',tol=1e-2)``
             Any classifier with a `coef_` and an `intercept_` attribute,
             those will be used as ``kernel_initializer`` and ``bias_initializer``
             of the underlying neural network to leverage the training.
@@ -237,20 +237,68 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             self.best_penalty_ = penalty_params[0]
 
         self.coef_ = (self.estimator.weights[0]).numpy().T
+        self.intercept_ = (self.estimator.weights[1]).numpy().T
+        self.training_data = (X,y)
         self.reduce_norm = reduce_norm
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              reduce_norm,identifiability=False)
         return self
 
 
-    def update_importance(self):
+    def get_permutation_importances(self,test_data=(None,None),*,n_repeats=10):
         """
-        After resuming an existing training run update `feature_importances_`
-        based on updated `coef_`
+        Key Idea : Fit a model based on all features, then every time randomly permute observations of one feature column,
+        keeping the other columns fixed, to break the association between that feature and response. Evaluate the
+        performance of the fitted model once on permuted data and once on unpermuted data. The more
+        important a feature is, the larger will be the corresponding drop in performance after permutation.
+
+        Note : It implicitly assumes independence of features. Not suitable
+        when features are highly correlated or one-hot-encoded categorical features are there.
+
+        Parameters
+        ----------
+        test_data : tuple (X_test,y_test)
+            X_test has shape (n_samples,n_features)
+            y_test has shape (n_samples,)
+
+        n_repeats : int ; default 10
+            Number of times to permute a feature.
+
+        Returns
+        -------
+        A ``sklearn.inspection.permutation_importance`` object.
+
+
+        [ Calling this function will override the `coef_` based `feature_importances_` ]
+
+        """
+        X_test,y_test = test_data
+        X_train,y_train = self.training_data
+        X_test = X_train if (X_test is None) else tf.convert_to_tensor(pd.get_dummies(X_test,drop_first=True,dtype=X_train.dtype))
+        y_test = y_train if (y_test is None) else tf.convert_to_tensor(pd.get_dummies(y_test,drop_first=False,dtype=int))
+        return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
+                                               scoring = lambda model,X,y : model.evaluate(X,y,verbose=0)[1])
+
+
+    def update_importance(self,imp_kind='coef',**kwargs_pimp):
+        """
+        After resuming an existing training run, update `feature_importances_`
+        based on updated `coef_` and `intercept_`.
+
+        Parameters
+        ----------
+        kind : a string from {'coef','permutation'} ; default 'coef'
+            Which kind of feature importances to be updated.
+
+        **kwargs_pimp : other keyword arguments to ``get_permutation_importances`` method.
         """
         self.coef_ = (self.estimator.weights[0]).numpy().T
-        self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                             self.reduce_norm,identifiability=False)
+        self.intercept_ = (self.estimator.weights[1]).numpy().T
+        if imp_kind == 'permutation':
+            self.get_permutation_importances(**kwargs_pimp)
+        else :
+            self.feature_importances_ = self._coef_to_importance(self.coef_,
+                                                                 self.reduce_norm,identifiability=False)
 
 
     def transform(self,X):
