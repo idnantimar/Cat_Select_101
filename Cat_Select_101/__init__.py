@@ -17,6 +17,7 @@ from sklearn.base import BaseEstimator,check_is_fitted
 from sklearn.feature_selection import SelectorMixin
 from scipy.stats import rankdata
 from sklearn.metrics import precision_score,recall_score,f1_score,confusion_matrix,ConfusionMatrixDisplay
+from sklearn.inspection import permutation_importance
 import joblib, os
 from datetime import datetime
 
@@ -121,46 +122,39 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 
-    def _lofo_importance(self,test_data,zero_tol=1e-16):
+    def _permutation_importance(self,test_data,*,n_repeats=10):
         """
-        This function calculates 'leave one feature out' based feature importances, assuming
-        there are two attributes `coef_` and `intercept_`.
+        This function calculates permutation based feature importances, assuming
+        there is a fitted ``estimator`` with a ``score`` method.
 
-        Key Idea : Fit a model based on all features, then every time set one feature as 0
-        and evaluate the log-likelihood based on new data and full-model based coefficients.
-        The more important a feature is, the larger will be the drop in log-likelihood compared to full model.
+        Key Idea : Fit a model based on all features, then every time randomly permute observations of one feature column,
+        keeping the other columns fixed, to break the association between that feature and response. Evaluate the
+        performance of the fitted model once on permuted data and once on unpermuted data. The more
+        important a feature is, the larger will be the corresponding drop in performance after permutation.
 
         [ Note: Calling this function will override the `coef_` based `feature_importances_` ]
 
         Parameters
         ----------
-        test_data : tuple (X_full,y)
-            X_full input samples, shape (n_samples,n_features)
-            y target values, shape (n_samples,n_classes)
+        test_data : tuple (X_test,y_test)
+            X_test has shape (n_samples,n_features)
+            y_test has shape (n_samples,)
 
-        zero_tol : float ; default 1e-16
-            A very small number, used for avoiding ``ZeroDivisionError``.
+        n_repeats : int ; default 10
+            Number of times to permute a feature.
+
+        Returns
+        -------
+        A ``sklearn.inspection.permutation_importance`` object.
 
         """
-        X_full,y = test_data
-        n,m = X_full.shape
-        ## log-likelihood function ...
-        def log_likelihood(X):
-            Wx = np.matmul(X,self.coef_.T) + self.intercept_
-            exp_Wx = np.exp(Wx - np.max(Wx,axis=1,keepdims=True))
-            probs = exp_Wx / exp_Wx.sum(axis=1,keepdims=True)
-            L = np.where(y,probs,1) + np.where(probs>zero_tol,probs,zero_tol)
-            return np.sum(np.log(L),axis=None)
-        ## full score ...
-        scores = np.full(fill_value=log_likelihood(X_full),
-                         shape=(m,))
-        ## lofo scores ...
-        for j in range(m):
-            X_current = X_full.copy()
-            X_current[:,j] = 0
-            scores[j] -= log_likelihood(X_current)
-        ## feature importances ...
-        self.feature_importances_ = scores/n
+        X_test,y_test = test_data
+        out = permutation_importance(self.estimator,X_test,y_test,
+                                     scoring=None,
+                                     n_repeats=n_repeats,
+                                     random_state=self.random_state)
+        self.feature_importances_ = out.importances_mean
+        return out
 
 
 
