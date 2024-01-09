@@ -133,7 +133,8 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         X_test,y_test = test_data
         X_test = self.training_data[0] if (X_test is None) else pd.get_dummies(X_test,drop_first=True,dtype=int)
         y_test = self.training_data[1] if (y_test is None) else y_test
-        return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats)
+        return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
+                                               scoring=None)
 
 
     def transform(self,X):
