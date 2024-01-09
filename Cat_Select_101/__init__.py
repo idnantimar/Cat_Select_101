@@ -122,10 +122,10 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 
-    def _permutation_importance(self,test_data,*,n_repeats=10):
+    def _permutation_importance(self,test_data,*,n_repeats=10,scoring=None):
         """
         This function calculates permutation based feature importances, assuming
-        there is a fitted ``estimator`` with a ``score`` method.
+        there is a fitted ``estimator``.
 
         Key Idea : Fit a model based on all features, then every time randomly permute observations of one feature column,
         keeping the other columns fixed, to break the association between that feature and response. Evaluate the
@@ -143,6 +143,9 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         n_repeats : int ; default 10
             Number of times to permute a feature.
 
+        scoring : str or callable ; default None
+            Scorer to use.
+
         Returns
         -------
         A ``sklearn.inspection.permutation_importance`` object.
@@ -150,10 +153,10 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         """
         X_test,y_test = test_data
         out = permutation_importance(self.estimator,X_test,y_test,
-                                     scoring=None,
+                                     scoring=scoring,
                                      n_repeats=n_repeats,
                                      random_state=self.random_state)
-        self.feature_importances_ = out.importances_mean
+        self.feature_importances_ = np.median(out.importances,axis=1)
         return out
 
 
