@@ -47,6 +47,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
             select more than `max_features`.
 
     """
+
     threshold = 0
     max_features = None
     def __init__(self,random_state=None):
@@ -178,8 +179,8 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         ranking_ = rankdata(-self.feature_importances_,method='ordinal')
                 ## the most important feature has rank=1
                  ## the least important feature has rank='n_features_in_'
-                  ## if two features get exactly same importance (very rare),
-                  ## they will still get distinct integer ranks, based on which one occured first
+                ## if two features get exactly same importance (very rare),
+                ## they will still get distinct integer ranks, based on which one occured first
         if (self.max_features is None) :
             self.threshold_ = self.threshold
         else:
@@ -191,7 +192,54 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         self.support_ = (self.feature_importances_ >= self.threshold_)
         self.ranking_ = ranking_
         self.n_features_selected_ = self.support_.sum()
+        if hasattr(self,'feature_names_in_') :
+            self.features_selected_ = self.feature_names_in_[self.support_]
         return self.support_
+
+
+
+    def transform(self,X):
+        """
+        Reduce X to the selected features.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The input samples to be transformed.
+
+        Returns
+        -------
+        2-D array of shape (n_samples, n_selected_features)
+            The input samples with only the selected features.
+
+        """
+        X_tr = super().transform(X)
+        return pd.DataFrame(X_tr,
+                            index=X.index,columns=getattr(self,'features_selected_',None))
+
+
+
+    def fit_transform(self,X,y,**fit_params):
+        """
+        ``fit`` the data (X,y) then transform X
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The training input samples.
+
+        y : array-like of shape (n_samples,)
+            The target values.
+
+        **fit_params : other keyword arguments to ``fit`` method.
+
+        Returns
+        -------
+        2-D array of shape (n_samples, n_selected_features)
+            The input samples with only the selected features.
+
+        """
+        return super().fit_transform(X,y,**fit_params)
 
 
 
