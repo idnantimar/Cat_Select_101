@@ -2,6 +2,7 @@
 Created on Sat Dec 23 10:13:35 2023
 
 Topic: Penalized Regression based feature selection (for categorical response).
+
 @author: R.Nandi
 """
 
@@ -302,20 +303,6 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
 
     def transform(self,X):
-        """
-        Reduce X to the selected features.
-
-        Parameters
-        ----------
-        X : DataFrame of shape (n_samples, n_features)
-            The input samples.
-
-        Returns
-        -------
-        2-D array of shape (n_samples, n_selected_features)
-            The input samples with only the selected features.
-
-        """
         X = pd.get_dummies(X,drop_first=True,dtype=int)
         return super().transform(X)
 
