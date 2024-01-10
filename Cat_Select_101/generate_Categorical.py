@@ -306,17 +306,16 @@ def detect_Categorical(X,get_names=False):
 
     Returns
     -------
-    An array of shape (n_features,) ; when names=False
+    An array of shape (n_features,) ; when get_names=False
         True if a feature is categorical, False otherwise.
 
-    An Index containing categorical feature names ; when names=True
+    An Index containing categorical feature names ; when get_names=True
 
     """
-    dtypes = Z.dtypes.astype(str)
+    dtypes = X.dtypes.astype(str)
     check_Xj = np.vectorize(lambda Xj : ('float' not in Xj) and ('int' not in Xj))
     out = check_Xj(dtypes.values)
     return out if (not get_names) else dtypes.index[out]
-
 
 
 #### ==========================================================================
@@ -328,35 +327,132 @@ def detect_Categorical(X,get_names=False):
 #### Scale numric features only ===============================================
 
 from sklearn.preprocessing import StandardScaler
+from sklearn.base import BaseEstimator,TransformerMixin
 
 
-def scale_Numeric(X,is_Cat,*,Scaler=StandardScaler()):
-    """
-    In a DataFrame scales the numeric columns only inplace, keeping the categorical columns unchanged.
+class scale_Numeric(TransformerMixin):
+    def __init__(self,base_scaler=StandardScaler()):
+        """
+        In a DataFrame scales the numeric columns only, keeping the categorical columns unchanged.
 
-    NOTE : This function does not return a new scaled copy, but performs scaling inplace.
+        Parameters
+        ----------
+        base_scaler : ``sklearn.preprocessing`` Scaler object ; default ``StandardScaler()``
+            The underlying scaler in use.
+        """
+        self.base_scaler = base_scaler
 
-    Parameters
-    ----------
-    X : DataFrame of shape (n_samples,n_features)
-        The input data.
+    def fit(self,X,is_Cat):
+        """
+        ``fit`` method of the transformer.
 
-    is_Cat : array of shape (n_features,)
-        True if a feature is categorical, False otherwise.
-        e.g.-
-        >>> scale_Numeric(X,is_Cat=detect_Categorical(X))
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples,n_features)
+            The input data.
 
-    Scaler : ``sklearn.preprocessing`` Scaler object ; default ``StandardScaler()``
+        is_Cat : array of shape (n_features,)
+            True if a feature is categorical, False otherwise.
+            e.g.-
+            >>> scale_Numeric(X,is_Cat=detect_Categorical(X))
 
-    Returns
-    -------
-    The fitted `Scaler`.
+        Attributes
+        ----------
+        is_not_Cat_ : ``np.invert``(`is_Cat`)
 
-    """
-    is_Num = np.invert(is_Cat)
-    X_Num = Z.iloc[:,is_Num]
-    Z.iloc[:,is_Num] = Scaler.fit_transform(X_Num)
-    return Scaler
+        Returns
+        -------
+        self
+            The fitted instance is returned.
+
+        """
+        self.is_not_Cat_ = np.invert(is_Cat)
+        if not all(is_Cat) :
+            X_Num = X.iloc[:,self.is_not_Cat_]
+            self.base_scaler.fit(X_Num)
+        return self
+
+    def transform(self,X,*,in_place=True):
+        """
+        ``transform`` method of the transformer.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples,n_features)
+            The input data.
+
+        in_place : bool ; default False
+            Whether to transform the data in place.
+
+        Returns
+        -------
+        X_tr : the transformed DataFrame , when in_place=False
+
+        None , when in_place=True
+
+        """
+        if any(self.is_not_Cat_) :
+            if not in_place : X = X.copy()
+            X_Num = X.iloc[:,self.is_not_Cat_]
+            X.iloc[:,self.is_not_Cat_] = self.base_scaler.transform(X_Num)
+        return None if in_place else X
+
+    def fit_transform(self,X,is_Cat,*,in_place=True):
+        """
+        ``fit`` the data, then ``transform`` it.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples,n_features)
+            The input data.
+
+        is_Cat : array of shape (n_features,)
+            True if a feature is categorical, False otherwise.
+            e.g.-
+            >>> scale_Numeric(X,is_Cat=detect_Categorical(X))
+
+        in_place : bool ; default False
+            Whether to transform the data in place.
+
+        Attributes
+        ----------
+        is_not_Cat_ : ``np.invert``(`is_Cat`)
+
+
+        Returns
+        -------
+        X_tr : the transformed DataFrame , when in_place=False
+
+        None , when in_place=True
+
+        """
+        self.fit(X,is_Cat)
+        return self.transform(X,in_place=in_place)
+
+    def inverse_transform(self,X,*,in_place=True):
+        """
+        Scale back the data to the original representation.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples,n_features)
+            The input data.
+
+        in_place : bool ; default False
+            Whether to transform the data in place.
+
+        Returns
+        -------
+        X_tr : the inverse transformed DataFrame , when in_place=False
+
+        None , when in_place=True
+
+        """
+        if any(self.is_not_Cat_) :
+            if not in_place : X = X.copy()
+            X_Num = X.iloc[:,self.is_not_Cat_]
+            X.iloc[:,self.is_not_Cat_] = self.base_scaler.inverse_transform(X_Num)
+        return None if in_place else X
 
 
 
