@@ -138,20 +138,6 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
 
 
     def transform(self,X):
-        """
-        Reduce X to the selected features.
-
-        Parameters
-        ----------
-        X : DataFrame of shape (n_samples, n_features)
-            The input samples.
-
-        Returns
-        -------
-        2-D array of shape (n_samples, n_selected_features)
-            The input samples with only the selected features.
-
-        """
         X = pd.get_dummies(X,drop_first=True,dtype=int)
         return super().transform(X)
 
