@@ -92,8 +92,8 @@ class cb_importance(My_Template_FeatureImportance):
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        self
+            The fitted ``cb_importance`` instance is returned.
 
         """
         super().fit(X,y)
