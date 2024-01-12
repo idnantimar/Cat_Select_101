@@ -62,7 +62,7 @@ class SIS_importance(My_Template_FeatureImportance):
 
     def fit(self,X,y):
         """
-        ``fit`` method for ``SIS_importance``.
+        ``fit`` method for ``SIScat_importance``.
 
         This method is extremely fast as it does not involve any cross-validation or hyperparameter tuning.
 
