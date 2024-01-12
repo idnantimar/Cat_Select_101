@@ -85,14 +85,14 @@ class SIS_importance(My_Template_FeatureImportance):
         ### empirical pmf of categorical response .....
         u = pd.get_dummies(y,dtype=float,drop_first=False).to_numpy().T
                 ## each row is indicator for a response class label
-        class_probs = u.mean(axis=1,keepdims=True)
+        class_probs = u.mean(axis=-1,keepdims=True)
         ### computation for each feature .....
         u = (u/class_probs) - 1
                 ## this will be useful for calculating [F(X|Y) - F(X)]
         def for_jColumn(Xj):
             out = 0
-            for x in Xj:
-                v = np.mean((Xj<=x)*u,axis=1,keepdims=True)
+            for x in Xj :
+                v = np.mean((Xj<=x)*u,axis=-1,keepdims=True)
                     ## this quantity is [F(X|Y) - F(X)]
                 out += np.sum(class_probs*(v**2),axis=None)
             return out/self.n_samples_
@@ -147,37 +147,6 @@ class SIS_importance(My_Template_FeatureImportance):
 #### For Categorical Predictors ===============================================
 
 
-##> ............................................................
-from scipy.stats import entropy
-
-
-def _testHomogeneity_Categorical(x,y,seed=None,*,n_resamples=200):
-    ## returns the p-value for testing H0: "x & y have same pmf" vs H1: not H0
-    ## based on permutation test of Jensen-Shannon divergence, a right-tailed test
-    n1,n2 = len(x),len(y)
-    pooled_data = pd.concat([x,y])
-    def JS_Div(a,b):
-        a = pd.get_dummies(a).mean(axis=0)
-        b = pd.get_dummies(b).mean(axis=0)
-        m = (a+b)/2
-        return (entropy(a,m)+entropy(b,m))
-        ## we use 2*(JS divergence) as test statistic, >=0
-        ## larger the value, stronger the evidence againt H0
-    T_obs = JS_Div(x,y)
-    generator = np.random.default_rng(seed)
-    def T_i(i):
-        resampled_data = pd.Series(generator.permutation(pooled_data),dtype='category')
-        x_,y_ = resampled_data[:n1],resampled_data[n1:]
-        return JS_Div(x_,y_)
-    T_simulated = list(map(T_i,range(n_resamples)))
-    return (np.array(T_simulated)>=T_obs).mean()
-
-#> .............................................................
-
-
-from itertools import combinations
-
-
 class SIScat_importance(My_Template_FeatureImportance):
     """
         Key Idea : In the setup of categorical response Y, a feature Xj is unimportant
@@ -205,9 +174,11 @@ class SIScat_importance(My_Template_FeatureImportance):
 
         References
         ----------
-        ..[1] Sen, Sweata, Damitri Kundu, and Kiranmoy Das.
-        "Variable selection for categorical response: A comparative study."
-        Computational Statistics 38.2 (2023): 809-826.
+        ..[1] Cui, Hengjian, Runze Li, and Wei Zhong. "Model-free feature screening
+        for ultrahigh dimensional discriminant analysis."
+        Journal of the American Statistical Association 110.510 (2015): 630-641.
+
+        [ Just like CDF for continuous features, we will use PMF for categorical features ]
 
     """
 
@@ -219,10 +190,10 @@ class SIScat_importance(My_Template_FeatureImportance):
         self.threshold = threshold
         self.max_features = max_features
 
-    def fit(self,X,y,alpha=0.05,
-            testing_rule=_testHomogeneity_Categorical,**kwargs):
+
+    def fit(self,X,y):
         """
-        ``fit`` method for ``SIScat_importance``.
+        ``fit`` method for ``SIS_importance``.
 
         This method is extremely fast as it does not involve any cross-validation or hyperparameter tuning.
 
@@ -236,40 +207,32 @@ class SIScat_importance(My_Template_FeatureImportance):
         y : Series of shape (n_samples,)
             The target values.
 
-        alpha : float in (0,1) ; default 0.05
-            The level of significance for testing each feature.
-
-            [ Note: Due to Bonferroni correction, for multiple(>2) categories may have very small power ]
-
-        testing_rule : a function of type ``test(group1,group2,seed,**kwargs)->pvalue`` ;
-        default option is a permutation test based on Jensen-Shannon divergence.
-
-        **kwargs : other keyword arguments to `testing_rule`.
-
         Returns
         -------
         self
             The fitted ``SIScat_importance`` instance is returned.
         """
         super().fit(X,y)
-        y = pd.get_dummies(y,dtype=bool).to_numpy()
-        X = X.astype('category')
-        ### bonferroni correction .....
-        k = self.n_classes_
-        all_pairs = list(combinations(range(k),2))
-        alpha /= (k*(k-1)/2)
+        ### empirical pmf of categorical response .....
+        u = pd.get_dummies(y,dtype=float,drop_first=False).to_numpy().T
+                ## each row is indicator for a response class label
+        class_probs = u.mean(axis=-1,keepdims=True)
         ### computation for each feature .....
+        u = (u/class_probs) - 1
+                ## this will be useful for calculating [P(X|Y) - P(X)]
         def for_jColumn(Xj):
-            p_val = []
-            for Group1,Group2 in all_pairs :
-                Group1 = Xj[y[:,Group1]]
-                Group2 = Xj[y[:,Group2]]
-                p_val += [testing_rule(Group1,Group2,self.random_state,**kwargs)]
-            return p_val
+            out = 0
+            Xj = pd.get_dummies(Xj,dtype=bool,drop_first=False).to_numpy().T
+                ## each column is indicator for a predictor class label
+            Xj_probs = Xj.mean(axis=-1)
+                ## marginal pmf for Xj
+            for i in range(Xj.shape[0]) :
+                v = np.mean(Xj[i]*u,axis=-1,keepdims=True)
+                    ## this quantity is [P(X|Y) - P(X)]
+                out += np.sum(class_probs*(v**2),axis=None)*Xj_probs[i]
+            return out
         ### iterating over the columns .....
-        pvalues = X.apply(for_jColumn,axis=0).to_numpy()
-        ### higher criticism approach .....
-
+        self.feature_importances_ = X.apply(for_jColumn,axis=0).to_numpy()
         return self
 
 
@@ -304,6 +267,7 @@ class SIScat_importance(My_Template_FeatureImportance):
         else :
             self.true_support = (self.true_coef > self.threshold_)
         return super().get_error_rates(plot=plot)
+
 
 
 
