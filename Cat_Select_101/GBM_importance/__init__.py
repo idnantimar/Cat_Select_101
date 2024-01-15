@@ -139,7 +139,7 @@ class cb_importance(My_Template_FeatureImportance):
         if (self.true_coef.dtype==bool) :
             self.true_support = self.true_coef
         else :
-            self.true_support = (self.true_coef > self.threshold_)
+            self.true_support = (self.true_coef >= self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
