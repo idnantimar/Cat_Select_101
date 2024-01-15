@@ -175,7 +175,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
             true_support = self._coef_to_importance(self.true_coef.reshape((-1,self.n_features_in_)),
                                                     self.reduce_norm,
                                                     identifiability=False)
-            self.true_support = (true_support > self.threshold_)
+            self.true_support = (true_support >= self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
