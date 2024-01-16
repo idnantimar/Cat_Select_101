@@ -17,7 +17,6 @@ from . import My_Template_FeatureImportance
 
 
 
-
 class OvR_importance(My_Template_FeatureImportance):
     """
         Feature selection using the One-vs-Rest classification scheme.
@@ -27,11 +26,9 @@ class OvR_importance(My_Template_FeatureImportance):
         that specific target class. Importances from all OvR classifiers will be aggregated
         for combined `feature_importances_`
 
-
         Class Variables
         ---------------
         Estimator_Type : ``{'penalty':'l1','multi_class':'ovr','solver':'saga'}``
-
 
         Parameters
         ----------
