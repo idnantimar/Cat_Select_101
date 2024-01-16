@@ -17,37 +17,74 @@ from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 from .. import My_Template_FeatureImportance
-from .._utils._WLasso_LogisticReg import WLasso_Logistic
 
 
 
 ##> ..............................................................
+from .._utils._WLasso_LogisticReg import WLasso_Logistic
 
-class _LogisticMCPRegression(BaseEstimator):
-    def __init__(self,n_classes,strength=1,concavity=3,random_state=None,avoid_ZeroDivision=1e-16,):
+class _LogisticMCPRegression_PyMc(BaseEstimator):
+    """
+        Logistic MCP regression using ``PyMC``.
+    """
+    def __init__(self,n_classes,strength=1,concavity=3,random_state=None):
         self.n_classes = n_classes
         ## number of target classes
         self.strength = strength
         self.concavity = concavity
         ## controls the strength and concavity of penalty
         self.random_state = random_state
-        self.avoid_ZeroDivision = avoid_ZeroDivision
 
-    def rhd_MCP(self,W):
+    def _rhd_MCP(self,W):
         ## the right hand derivatives of MCP petalty wrt |W|
         ## we have rhd_MCP(0+)=l
         u = self.strength - np.abs(W)/self.concavity
         return np.where(u>0,u,0)
 
-    def fit(self,X,y,W0,mm_steps=1,
-            **kwargs_wlasso):
+    def fit(self,X,y,W0,mm_steps=2,draws=1000,tune=1000,avoid_ZeroDivision=1e-16,
+            **kwargs):
+        """
+        ``fit`` method for ``_LogisticMCPRegression_PyMc``.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The training input samples.
+
+        y : array-like of shape (n_samples,)
+            The target values.
+
+        W0 : array of shape (n_classes-1,n_features)
+            Initial guess for MM algorithm.
+
+        draws : int ; default 1000
+            The number of samples to draw.
+
+        tune : int ; default 1000
+            Number of iterations to tune the step sizes, scalings etc. Tuning samples
+            will be drawn in addition to the number specified in the `draws`,
+            and will be discarded then.
+
+        mm_steps : int ; default 2
+            Number of iterations in MM algorithm.
+
+        avoid_ZeroDivision : float ; default 1e-16
+            A very small positive number to be substituted, to avoid ``ZeroDivisionError``
+
+        **kwargs : other keyword arguments to ``WLasso_Logistic.fit(...)``.
+
+        Returns
+        -------
+        self
+
+        """
         self.estimator = WLasso_Logistic(n_classes=self.n_classes,
-                                    avoid_ZeroDivision=self.avoid_ZeroDivision,
+                                    avoid_ZeroDivision=avoid_ZeroDivision,
                                     random_state=self.random_state)
         ## MM algorithm .....
         while(mm_steps>0) :
-            penalty_strength = self.rhd_MCP(W0)
-            self.estimator.fit(X,y,penalty_strength,**kwargs_wlasso)
+            penalty_strength = self._rhd_MCP(W0)
+            self.estimator.fit(X,y,penalty_strength,draws=draws,tune=tune,**kwargs)
             W0 = self.estimator.coef_
             mm_steps -= 1
         ## fitted coefficients .....
@@ -65,9 +102,10 @@ class _LogisticMCPRegression(BaseEstimator):
 
 
 
+
 class MCP_importance(My_Template_FeatureImportance):
     """
-        Feature selection based on minimax concave penalty (MCP)
+        Feature selection based on minimax concave penalty (MCP).
 
         This penalty is not convex . It is concave , symmetric with respect to 0
         and increases with the magnitude of coefficients and
@@ -124,16 +162,26 @@ class MCP_importance(My_Template_FeatureImportance):
         -------
         array of shape (n_classes-1,n_features)
 
+        [ last target class is considered as baseline for identifiability ]
         """
         guess = LogisticRegression().fit(X,y)
         return guess.coef_[:-1] - guess.coef_[-1]
 
 
-    def fit(self,X,y,mcp_strength=[1.],mcp_concavity=[3.],cv_config={'cv':None,'n_jobs':None,'verbose':2},*,
-            draws=1000,tune=1000,mm_steps=2,
-            avoid_ZeroDivision=1e-16,
+    def _Estimator(self):
+        """
+        Which kind of method to be used for computation.
+
+        [ override if necessary ]
+
+        """
+        return _LogisticMCPRegression_PyMc
+
+
+    def fit(self,X,y,mcp_strength=[1.],mcp_concavity=[3.],*,
+            cv_config={'cv':None,'n_jobs':None,'verbose':2},
             reduce_norm=1,
-            **kwargs_wlasso):
+            **fit_params):
         """
         ``fit`` method for ``MCP_importance``
 
@@ -147,10 +195,11 @@ class MCP_importance(My_Template_FeatureImportance):
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
-            The training input samples.
+        X : DataFrame of shape (n_samples, n_features)
+            The training input samples. If a DataFrame with categorical column is passed as input,
+            `n_features_in_` will be number of columns after ``pd.get_dummies(X,drop_first=True)`` is applied.
 
-        y : array-like of shape (n_samples,)
+        y : Series of shape (n_samples,)
             The target values.
 
         mcp_strength : list ; default [1.]
@@ -162,25 +211,11 @@ class MCP_importance(My_Template_FeatureImportance):
         cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'n_jobs':None,'verbose':2}``
             Will be used when `mcp_strength` or `mcp_concavity` has to be determined by crossvalidation.
 
-        draws : int ; default 1000
-            The number of samples to draw.
-
-        tune : int ; default 1000
-            Number of iterations to tune the step sizes, scalings etc. Tuning samples
-            will be drawn in addition to the number specified in the `draws`,
-            and will be discarded then.
-
-        mm_steps : int ; default 2
-            Number of iterations in MM algorithm.
-
-        avoid_ZeroDivision : float ; default 1e-16
-            A very small positive number to be substituted, to avoid ``ZeroDivisionError``
-
         reduce_norm : non-zero int, inf, -inf ; default 1
             Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
             underlying Logistic Regression is of dimension 2. By default 'l1'-norm is being used.
 
-        **kwargs_wlasso : other keyword arguments to ``WLasso_Logistic.fit(...)``.
+        **fit_params : other keyword arguments to ``_Estimator().fit(...)``.
 
         Returns
         -------
@@ -192,23 +227,23 @@ class MCP_importance(My_Template_FeatureImportance):
         y = pd.Series(y,dtype='category')
         super().fit(X,y)
         ### assigning the estimator .....
-        estimator = _LogisticMCPRegression(self.n_classes_,mcp_strength[0],mcp_concavity[0],
-                                           self.random_state,
-                                           avoid_ZeroDivision)
+        estimator = self._Estimator()
+        estimator = estimator(self.n_classes_,
+                              mcp_strength[0],mcp_concavity[0],
+                              self.random_state)
         ### initial guess for MM algo .....
         W0 = self._initial_guess(X,y)
         ### fitting the model .....
-        kwargs_wlasso.update({'draws':draws,'tune':tune})
         if len(mcp_strength)>1 or len(mcp_concavity)>1 :
             cv_config.update({'refit':True})
             self.gridsearch = GridSearchCV(estimator,
                                            param_grid={'strength':mcp_strength,'concavity':mcp_concavity},
                                            **cv_config)
-            self.gridsearch.fit(X,y,W0=W0,mm_steps=mm_steps,**kwargs_wlasso)
+            self.gridsearch.fit(X,y,W0=W0,**fit_params)
             self.estimator = self.gridsearch.best_estimator_
             self.best_penalty_ = self.gridsearch.best_params_
         else :
-            estimator.fit(X,y,W0,mm_steps,**kwargs_wlasso)
+            estimator.fit(X,y,W0,**fit_params)
             self.estimator = estimator
             self.best_penalty_ = {'strength':mcp_strength[0],'concavity':mcp_concavity[0]}
         ### feature_importances .....
