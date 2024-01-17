@@ -52,7 +52,7 @@ class d_LSR(BaseEstimator):
             The training input samples.
 
         y : array-like of shape (n_samples,n_classes)
-            The target values.
+            The one-hot encoded target values.
 
         max_iter : int ; default 30
             The maximum number of iterations.
@@ -145,7 +145,7 @@ class d_LSR(BaseEstimator):
             The input samples.
 
         y : array-like of shape (n_samples,n_classes)
-            The target values.
+            The one-hot encoded target values.
 
         Returns
         -------
