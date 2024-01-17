@@ -51,8 +51,8 @@ class _LogisticMCPRegression_PyMc(BaseEstimator):
         X : array-like of shape (n_samples, n_features)
             The training input samples.
 
-        y : array-like of shape (n_samples,)
-            The target values.
+        y : array-like of shape (n_samples,n_classes)
+            The one-hot encoded target values.
 
         W0 : array of shape (n_classes-1,n_features)
             Initial guess for MM algorithm.
@@ -148,7 +148,7 @@ class MCP_importance(My_Template_FeatureImportance):
         """
         Initial value in MM algorithm.
 
-        [ Default is `coef_` based on ``LogisticRegression().fit(X,y)``, override if necessary ]
+        [ Default is `coef_` based on ``LogisticRegression(penalty='l2').fit(X,y)``, override if necessary ]
 
         Parameters
         ----------
@@ -164,7 +164,7 @@ class MCP_importance(My_Template_FeatureImportance):
 
         [ last target class is considered as baseline for identifiability ]
         """
-        guess = LogisticRegression().fit(X,y)
+        guess = LogisticRegression(penalty='l2').fit(X,y)
         return guess.coef_[:-1] - guess.coef_[-1]
 
 
@@ -189,7 +189,7 @@ class MCP_importance(My_Template_FeatureImportance):
         existing MM run, proceed as follows -
 
             >>> Model.fit(X,y,...) # fitting for the first time with required parameters
-            >>> Model.estimator.fit(X,y,W0=Model.coef_) # resuming previous run
+            >>> Model.estimator.fit(X,pd.get_dummies(y),W0=Model.coef_) # resuming previous run
             >>> Model.update_importance() # update feature_importances_
 
 
@@ -224,7 +224,6 @@ class MCP_importance(My_Template_FeatureImportance):
 
         """
         X = pd.get_dummies(X,drop_first=True,dtype=int)
-        y = pd.Series(y,dtype='category')
         super().fit(X,y)
         ### assigning the estimator .....
         estimator = self._Estimator()
@@ -239,11 +238,11 @@ class MCP_importance(My_Template_FeatureImportance):
             self.gridsearch = GridSearchCV(estimator,
                                            param_grid={'strength':mcp_strength,'concavity':mcp_concavity},
                                            **cv_config)
-            self.gridsearch.fit(X,y,W0=W0,**fit_params)
+            self.gridsearch.fit(X,pd.get_dummies(y,dtype=int,drop_first=False),W0=W0,**fit_params)
             self.estimator = self.gridsearch.best_estimator_
             self.best_penalty_ = self.gridsearch.best_params_
         else :
-            estimator.fit(X,y,W0,**fit_params)
+            estimator.fit(X,pd.get_dummies(y,dtype=int,drop_first=False),W0,**fit_params)
             self.estimator = estimator
             self.best_penalty_ = {'strength':mcp_strength[0],'concavity':mcp_concavity[0]}
         ### feature_importances .....
@@ -288,7 +287,8 @@ class MCP_importance(My_Template_FeatureImportance):
         X_test = X_train if (X_test is None) else pd.get_dummies(X_test,drop_first=True,dtype=int)
         y_test = y_train if (y_test is None) else pd.Categorical(y_test,
                                                                  categories=y_train.cat.categories)
-        return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
+        return super()._permutation_importance((X_test.to_numpy(),pd.get_dummies(y_test,dtype=int,drop_first=False).to_numpy()),
+                                               n_repeats=n_repeats,
                                                scoring=None)
 
 
