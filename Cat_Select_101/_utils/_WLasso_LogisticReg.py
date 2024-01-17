@@ -73,8 +73,8 @@ class WLasso_Logistic(BaseEstimator):
         X : array-like of shape (n_samples, n_features)
             The training input samples.
 
-        y : array-like of shape (n_samples,)
-            The target values.
+        y : array-like of shape (n_samples,n_classes)
+            The one-hot encoded target values.
 
         penalty_strength : array of shape (n_classes-1,n_features) or scaler ; default 0.1
             The weights corresponding to each 'l1'-penalties. Each entry must be non-negative.
@@ -114,8 +114,8 @@ class WLasso_Logistic(BaseEstimator):
         with pm.Model(**kwargs_Model) as Multinomial_Logistic:
             ## observed data ....
             n_features = X.shape[1]
-            X = pm.ConstantData('features',value=pd.DataFrame(X),infer_dims_and_coords=True)
-            y = pm.ConstantData('target',value=pd.get_dummies(y,drop_first=False,dtype=int))
+            X = pm.ConstantData('features',value=X)
+            y = pm.ConstantData('target',value=y)
             ## Laplace priors for weights ....
             w0 = np.where(penalty_strength>self.avoid_ZeroDivision,
                           penalty_strength,self.avoid_ZeroDivision)
@@ -194,8 +194,8 @@ class WLasso_Logistic(BaseEstimator):
         X : array-like of shape (n_samples, n_features)
             The input samples.
 
-        y : array-like of shape (n_samples,)
-            The target values.
+        y : array-like of shape (n_samples,n_classes)
+            The one-hot encoded target values.
 
         Returns
         -------
@@ -203,7 +203,6 @@ class WLasso_Logistic(BaseEstimator):
 
         """
         probs = self.predict_proba(X)
-        y = pd.get_dummies(y,drop_first=False,dtype=int).to_numpy()
         l = multinomial.logpmf(y,n=1,p=probs)
         return np.mean(l)
 
