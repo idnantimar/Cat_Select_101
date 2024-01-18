@@ -299,7 +299,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             self.get_permutation_importances(**kwargs_pimp)
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                                 self.reduce_norm,identifiability=False)
+                                                                 self._reduce_norm,identifiability=False)
 
 
     def transform(self,X):
