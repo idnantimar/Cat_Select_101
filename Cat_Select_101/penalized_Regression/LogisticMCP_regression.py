@@ -233,29 +233,29 @@ class MCP_importance(My_Template_FeatureImportance):
         ### initial guess for MM algo .....
         W0 = self._initial_guess(X,y)
         ### fitting the model .....
+        y = pd.get_dummies(y,dtype=int,drop_first=False)
         if len(mcp_strength)>1 or len(mcp_concavity)>1 :
             cv_config.update({'refit':True})
             self.gridsearch = GridSearchCV(estimator,
                                            param_grid={'strength':mcp_strength,'concavity':mcp_concavity},
                                            **cv_config)
-            self.gridsearch.fit(X,pd.get_dummies(y,dtype=int,drop_first=False),W0=W0,**fit_params)
+            self.gridsearch.fit(X,y,W0=W0,**fit_params)
             self.estimator = self.gridsearch.best_estimator_
             self.best_penalty_ = self.gridsearch.best_params_
         else :
-            estimator.fit(X,pd.get_dummies(y,dtype=int,drop_first=False),W0,**fit_params)
+            estimator.fit(X,y,W0,**fit_params)
             self.estimator = estimator
             self.best_penalty_ = {'strength':mcp_strength[0],'concavity':mcp_concavity[0]}
         ### feature_importances .....
         self.coef_ = self.estimator.coef_
         self.intercept_ = self.estimator.intercept_
-        self.training_data = (X,y)
-        self.reduce_norm = reduce_norm
+        self._reduce_norm = reduce_norm
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              reduce_norm,identifiability=True)
         return self
 
 
-    def get_permutation_importances(self,test_data=(None,None),*,n_repeats=10):
+    def get_permutation_importances(self,test_data,*,n_repeats=10):
         """
         Key Idea : Fit a model based on all features, then every time randomly permute observations of one feature column,
         keeping the other columns fixed, to break the association between that feature and response. Evaluate the
@@ -283,10 +283,8 @@ class MCP_importance(My_Template_FeatureImportance):
 
         """
         X_test,y_test = test_data
-        X_train,y_train = self.training_data
-        X_test = X_train if (X_test is None) else pd.get_dummies(X_test,drop_first=True,dtype=int)
-        y_test = y_train if (y_test is None) else pd.Categorical(y_test,
-                                                                 categories=y_train.cat.categories)
+        X_test = pd.get_dummies(X_test,drop_first=True,dtype=int)
+        y_test =  pd.Categorical(y_test,categories=self.classes_)
         return super()._permutation_importance((X_test.to_numpy(),pd.get_dummies(y_test,dtype=int,drop_first=False).to_numpy()),
                                                n_repeats=n_repeats,
                                                scoring=None)
