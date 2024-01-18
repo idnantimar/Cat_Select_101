@@ -331,7 +331,7 @@ from sklearn.base import BaseEstimator,TransformerMixin
 
 
 class scale_Numeric(TransformerMixin):
-    def __init__(self,base_scaler=StandardScaler()):
+    def __init__(self,base_scaler=StandardScaler(),*,in_place=False):
         """
         In a DataFrame scales the numeric columns only, keeping the categorical columns unchanged.
 
@@ -339,8 +339,13 @@ class scale_Numeric(TransformerMixin):
         ----------
         base_scaler : ``sklearn.preprocessing`` Scaler object ; default ``StandardScaler()``
             The underlying scaler in use.
+
+        in_place : bool ; default False
+            Whether to transform the data in place.
+
         """
         self.base_scaler = base_scaler
+        self.in_place = False
 
     def fit(self,X,is_Cat):
         """
@@ -372,7 +377,7 @@ class scale_Numeric(TransformerMixin):
             self.base_scaler.fit(X_Num)
         return self
 
-    def transform(self,X,*,in_place=True):
+    def transform(self,X):
         """
         ``transform`` method of the transformer.
 
@@ -380,9 +385,6 @@ class scale_Numeric(TransformerMixin):
         ----------
         X : DataFrame of shape (n_samples,n_features)
             The input data.
-
-        in_place : bool ; default False
-            Whether to transform the data in place.
 
         Returns
         -------
@@ -392,12 +394,12 @@ class scale_Numeric(TransformerMixin):
 
         """
         if any(self.is_not_Cat_) :
-            if not in_place : X = X.copy()
+            if not self.in_place : X = X.copy()
             X_Num = X.iloc[:,self.is_not_Cat_]
             X.iloc[:,self.is_not_Cat_] = self.base_scaler.transform(X_Num)
-        return None if in_place else X
+        return None if self.in_place else X
 
-    def fit_transform(self,X,is_Cat,*,in_place=True):
+    def fit_transform(self,X,is_Cat):
         """
         ``fit`` the data, then ``transform`` it.
 
@@ -411,13 +413,9 @@ class scale_Numeric(TransformerMixin):
             e.g.-
             >>> scale_Numeric(X,is_Cat=detect_Categorical(X))
 
-        in_place : bool ; default False
-            Whether to transform the data in place.
-
         Attributes
         ----------
         is_not_Cat_ : ``np.invert``(`is_Cat`)
-
 
         Returns
         -------
@@ -427,9 +425,9 @@ class scale_Numeric(TransformerMixin):
 
         """
         self.fit(X,is_Cat)
-        return self.transform(X,in_place=in_place)
+        return self.transform(X)
 
-    def inverse_transform(self,X,*,in_place=True):
+    def inverse_transform(self,X):
         """
         Scale back the data to the original representation.
 
@@ -437,9 +435,6 @@ class scale_Numeric(TransformerMixin):
         ----------
         X : DataFrame of shape (n_samples,n_features)
             The input data.
-
-        in_place : bool ; default False
-            Whether to transform the data in place.
 
         Returns
         -------
@@ -449,10 +444,10 @@ class scale_Numeric(TransformerMixin):
 
         """
         if any(self.is_not_Cat_) :
-            if not in_place : X = X.copy()
+            if not self.in_place : X = X.copy()
             X_Num = X.iloc[:,self.is_not_Cat_]
             X.iloc[:,self.is_not_Cat_] = self.base_scaler.inverse_transform(X_Num)
-        return None if in_place else X
+        return None if self.in_place else X
 
 
 
