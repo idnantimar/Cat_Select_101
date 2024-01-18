@@ -22,11 +22,12 @@ class dLS_impotance(My_Template_FeatureImportance):
     """
         Feature selection based on coefficients of least squares regression.
 
-        Note : Least Squares method is commonly used in regression setup with continuous response.
-        But introducing slack variables it can be extended to classification setup.
+        [ Least Squares method is commonly used in regression setup with continuous response.
+        But introducing slack variables it can be extended to classification setup. ]
 
-        Pros : Instead of OvR or OvO schemes, here we have one single model to train.
-        Cons : Unlike logistic regression, this method does not inherently provide probability
+        Pros : Instead of One-vs-One or One-vs-Rest schemes, here we have one single model to train.
+
+        Cons : Unlike ``LogisticRegression``, this method does not inherently provide probability
         estimates of the predicted classes.
 
         Parameters
