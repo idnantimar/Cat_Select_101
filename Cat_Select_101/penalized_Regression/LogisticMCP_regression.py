@@ -308,7 +308,7 @@ class MCP_importance(My_Template_FeatureImportance):
             self.get_permutation_importances(**kwargs_pimp)
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                                 self.reduce_norm,identifiability=True)
+                                                                 self._reduce_norm,identifiability=True)
 
 
     def transform(self,X):
