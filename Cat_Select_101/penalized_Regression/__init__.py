@@ -239,14 +239,14 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
         self.coef_ = (self.estimator.weights[0]).numpy().T
         self.intercept_ = (self.estimator.weights[1]).numpy().T
-        self.training_data = (X,y)
-        self.reduce_norm = reduce_norm
+        self._reduce_norm = reduce_norm
+        self._dtype = dtype
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              reduce_norm,identifiability=False)
         return self
 
 
-    def get_permutation_importances(self,test_data=(None,None),*,n_repeats=10):
+    def get_permutation_importances(self,test_data,*,n_repeats=10):
         """
         Key Idea : Fit a model based on all features, then every time randomly permute observations of one feature column,
         keeping the other columns fixed, to break the association between that feature and response. Evaluate the
@@ -274,9 +274,9 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
         """
         X_test,y_test = test_data
-        X_train,y_train = self.training_data
-        X_test = X_train if (X_test is None) else tf.convert_to_tensor(pd.get_dummies(X_test,drop_first=True,dtype=X_train.dtype))
-        y_test = y_train if (y_test is None) else tf.convert_to_tensor(pd.get_dummies(y_test,drop_first=False,dtype=int))
+        X_test = tf.convert_to_tensor(pd.get_dummies(X_test,drop_first=True,dtype=self._dtype))
+        y_test = pd.Categorical(y_test,categories=self.classes_)
+        y_test = tf.convert_to_tensor(pd.get_dummies(y_test,drop_first=False,dtype=int))
         return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
                                                scoring = lambda model,X,y : model.evaluate(X,y,verbose=0)[1])
 
@@ -313,10 +313,9 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
         Parameters
         ----------
-        true_coef : array of shape (`n_features_in_`,) or (`n_classes_`,`n_features_in_`)
-            If a 1-D boolean array , True implies the feature is important in true model, null feature otherwise.
-            If a 1-D array of floats , it represent the `feature_importances_` of the true model,
-            2-D array of floats represnt `coef_` of the true model.
+        true_coef : array of shape (`n_features_in_`,)
+            If a boolean array , True implies the feature is important in true model, null feature otherwise.
+            If a array of floats , it represent the `feature_importances_` of the true model.
 
         plot : bool ; default False
             Whether to plot the `confusion_matrix_for_features_`.
@@ -325,9 +324,9 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         -------
         dict
             Returns the empirical estimate of various error-rates
-           {'PCER': per-comparison error rate ,
-            'FDR': false discovery rate ,
-            'PFER': per-family error rate ,
+           {'PCER': per-comparison error rate,
+            'FDR': false discovery rate,
+            'PFER': per-family error rate,
             'TPR': true positive rate
             }
 
@@ -337,12 +336,8 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         if (self.true_coef.dtype==bool) :
             self.true_support = self.true_coef
         else :
-            true_support = self._coef_to_importance(self.true_coef.reshape((-1,self.n_features_in_)),
-                                                    self.reduce_norm,
-                                                    identifiability=False)
-            self.true_support = (true_support >= self.threshold_)
+            self.true_support = (self.true_coef >= self.threshold_)
         return super().get_error_rates(plot=plot)
-
 
 
 
