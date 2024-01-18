@@ -168,7 +168,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
         Returns
         -------
-        support : boolean array of shape (`n_features_in_`,)
+        boolean array of shape (`n_features_in_`,)
             An element is True iff its corresponding feature is selected for
             retention.
 
@@ -209,7 +209,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
         Returns
         -------
-        2-D array of shape (n_samples, n_selected_features)
+        DataFrame of shape (n_samples, n_selected_features)
             The input samples with only the selected features.
 
         """
@@ -221,25 +221,46 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
     def fit_transform(self,X,y,**fit_params):
         """
-        ``fit`` the data (X,y) then transform X
+        ``fit`` the data (X,y) then ``transform`` X
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : DataFrame of shape (n_samples, n_features)
             The training input samples.
 
-        y : array-like of shape (n_samples,)
+        y : Series of shape (n_samples,)
             The target values.
 
         **fit_params : other keyword arguments to ``fit`` method.
 
         Returns
         -------
-        2-D array of shape (n_samples, n_selected_features)
+        DataFrame of shape (n_samples, n_selected_features)
             The input samples with only the selected features.
 
         """
         return super().fit_transform(X,y,**fit_params)
+
+
+
+    def inverse_transform(self,X):
+        """
+        Reverse the transformation operation.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_selected_features)
+            The input samples with only selected feature-columns.
+
+        Returns
+        -------
+        DataFrame of shape (n_samples, `n_features_in_`)
+            Columns of zeros inserted where features would have been removed by ``transform()``.
+
+        """
+        X_r = super().inverse_transform(X)
+        return pd.DataFrame(X_r,
+                            index=X.index,columns=getattr(self,'feature_names_in_',None))
 
 
 
