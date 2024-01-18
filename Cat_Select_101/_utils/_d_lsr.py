@@ -41,53 +41,22 @@ class d_LSR(BaseEstimator):
         self.u = u
 
 
-    def fit(self,X,y,*,
-            max_iter=30,tol=1e-4):
+    def _iterative_updates(self,n_itr,X,y,W0,t0,M,tol):
         """
-        ``fit`` method for ``d_LSR``.
+            The main computation part.
 
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            The training input samples.
-
-        y : array-like of shape (n_samples,n_classes)
-            The one-hot encoded target values.
-
-        max_iter : int ; default 30
-            The maximum number of iterations.
-
-        tol : float ; default 1e-4
-            The tolerence for convergence criterion.
-
-        Returns
-        -------
-        self
-
-        Attributes
-        ----------
-        coef_ : array of shape (n_features,n_classes)
-            The estimated coefficients.
-
-        intercept_ : array of shape (1,n_classes)
-            The estimated intercepts.
+            [ for internal use only ]
         """
-        ### initialization ... ...
         n,m = X.shape
-        c = y.shape[1]
-        M = np.zeros_like(y,dtype=float)
-        W0 = np.zeros((m,c),dtype=float)
-        t0 = np.zeros((1,c),dtype=float)
-        _W0 = np.concatenate([W0,t0],axis=0)
         B = np.where(y,1,-1)
+        _W0 = np.concatenate([W0,t0],axis=0)
         _X = np.concatenate([X,np.full((n,1),self.u)],axis=1)
-        ### Iterative Updates ... ...
         ## Outer loop ....
-        for k in range(max_iter):
+        for k in range(n_itr):
             T = y + B*M
             SIGMA,D = np.eye(m+1,dtype=float),np.eye(n,dtype=float)
             ## Inner loop start ...
-            for _t in range(max_iter):
+            for _t in range(n_itr):
                 _XtD = np.matmul(_X.T,D)
                 _W = np.linalg.solve(np.matmul(_XtD,_X) + self.regularization*SIGMA,
                                     np.matmul(_XtD,T))
@@ -109,9 +78,86 @@ class d_LSR(BaseEstimator):
                 M = np.where(BP>0,BP,0)
                 W0,t0 = W,t
         ## Outer loop end ||
-        ### return values ... ...
-        self.coef_ = W
-        self.intercept_ = t
+        return {'X':X,'y':y,
+                'W0':W,'t0':t,
+                'M':M}
+
+
+    def fit(self,X,y,initial_guess,*,
+            max_iter=30,tol=1e-4):
+        """
+        ``fit`` method for ``d_LSR``.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The training input samples.
+
+        y : array-like of shape (n_samples,n_classes)
+            The one-hot encoded target values.
+
+        initial_guess : (W0,b0)
+            Where,
+            W0 is array of shape (n_features,n_classes)
+            and b0 is array of shape (1,n_classes)
+
+            If no guess available, initialize with ``np.zeros()``.
+
+        max_iter : int ; default 30
+            The maximum number of iterations.
+
+        tol : float ; default 1e-4
+            The tolerence for convergence criterion.
+
+        Returns
+        -------
+        self
+
+        Attributes
+        ----------
+        coef_ : array of shape (n_features,n_classes)
+            The estimated coefficients.
+
+        intercept_ : array of shape (1,n_classes)
+            The estimated intercepts.
+
+        history_ : dict containing informations about the last iteration.
+        """
+        ### initialization .....
+        W0,t0 = initial_guess
+        M = np.zeros_like(y,dtype=float)
+        ### Iterative Updates .....
+        self.history_ = self._iterative_updates(max_iter,
+                                                X,y,
+                                                W0,t0,M,tol)
+        ### return values .....
+        self.coef_ = self.history_['W0']
+        self.intercept_ = self.history_['t0']
+        return self
+
+
+    def update_itr(self,n_itr=1,tol=1e-4):
+        """
+        Update an existing run.
+
+        Parameters
+        ----------
+        n_itr : int ; default 1
+            The number of additional iterations.
+
+        tol : float ; default 1e-4
+            The tolerence for convergence criterion.
+
+        Returns
+        -------
+        self
+
+        """
+        self.history_ = self._iterative_updates(n_itr,
+                                                self.history_['X'],self.history_['y'],
+                                                self.coef_,self.intercept_,self.history_['M'],tol)
+        self.coef_ = self.history_['W0']
+        self.intercept_ = self.history_['t0']
         return self
 
 
