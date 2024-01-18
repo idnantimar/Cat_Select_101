@@ -65,7 +65,8 @@ class dLS_impotance(My_Template_FeatureImportance):
         existing run, proceed as follows -
 
             >>> Model.fit(X,y,...) # fitting for the first time with required parameters
-            >>> Model.estimator.update_itr(n_itr=10) # resuming previous run
+            >>> X_,y_ = pd.get_dummies(X,drop_first=True),pd.get_dummies(y)
+            >>> Model.estimator.fit(X_,y_,warm_start=True) # resuming previous run
             >>> Model.update_importance() # update feature_importances_
 
 
@@ -81,7 +82,7 @@ class dLS_impotance(My_Template_FeatureImportance):
         regularization : list ; default [0.1]
             The strength of regularization.
 
-        initial_guess : (W0,b0)
+        initial_guess : tuple (W0,b0)
             Where,
             W0 is array of shape (n_features,n_classes)
             and b0 is array of shape (1,n_classes)
@@ -96,7 +97,7 @@ class dLS_impotance(My_Template_FeatureImportance):
 
         reduce_norm : non-zero int, inf, -inf ; default 2
             Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
-            underlying Logistic Regression is of dimension 2. By default 'l2'-norm is being used.
+            underlying model is of dimension 2. By default 'l2'-norm is being used.
 
         u : float ; default 1e+4
             A large positive number (virtually +ve infinity).
@@ -120,7 +121,7 @@ class dLS_impotance(My_Template_FeatureImportance):
         if W0 is None : W0 = np.zeros((self.n_features_in_,self.n_classes_),dtype=float)
         if t0 is None : t0 = np.zeros((1,self.n_classes_),dtype=float)
         ### fitting the Model .....
-        fit_params = {'initial_guess':(W0,t0),'max_iter':max_iter,'tol':tol}
+        fit_params = {'W0':W0,'t0':t0,'max_iter':max_iter,'tol':tol}
         if len(regularization)>1 :
             cv_config.update({'refit':True})
             self.gridsearch = GridSearchCV(estimator,
@@ -136,14 +137,13 @@ class dLS_impotance(My_Template_FeatureImportance):
         ### feature_importances .....
         self.coef_ = self.estimator.coef_.T
         self.intercept_ = self.estimator.intercept_.ravel()
-        self.training_data = (X,y)
-        self.reduce_norm = reduce_norm
+        self._reduce_norm = reduce_norm
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              reduce_norm,identifiability=True)
         return self
 
 
-    def get_permutation_importances(self,test_data=(None,None),*,n_repeats=10):
+    def get_permutation_importances(self,test_data,*,n_repeats=10):
         """
         Key Idea : Fit a model based on all features, then every time randomly permute observations of one feature column,
         keeping the other columns fixed, to break the association between that feature and response. Evaluate the
@@ -171,10 +171,8 @@ class dLS_impotance(My_Template_FeatureImportance):
 
         """
         X_test,y_test = test_data
-        X_train,y_train = self.training_data
-        X_test = X_train if (X_test is None) else pd.get_dummies(X_test,drop_first=True,dtype=int)
-        y_test = y_train if (y_test is None) else pd.Categorical(y_test,
-                                                                 categories=y_train.columns)
+        X_test = pd.get_dummies(X_test,drop_first=True,dtype=int)
+        y_test =  pd.Categorical(y_test,categories=self.classes_)
         return super()._permutation_importance((X_test.to_numpy(),pd.get_dummies(y_test,dtype=int,drop_first=False).to_numpy()),
                                                n_repeats=n_repeats,
                                                scoring=None)
@@ -198,7 +196,7 @@ class dLS_impotance(My_Template_FeatureImportance):
             self.get_permutation_importances(**kwargs_pimp)
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                                 self.reduce_norm,identifiability=True)
+                                                                 self._reduce_norm,identifiability=True)
 
 
     def transform(self,X):
