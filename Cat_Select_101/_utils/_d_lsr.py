@@ -78,13 +78,12 @@ class d_LSR(BaseEstimator):
                 M = np.where(BP>0,BP,0)
                 W0,t0 = W,t
         ## Outer loop end ||
-        return {'X':X,'y':y,
-                'W0':W,'t0':t,
+        return {'W0':W,'t0':t,
                 'M':M}
 
 
-    def fit(self,X,y,initial_guess,*,
-            max_iter=30,tol=1e-4):
+    def fit(self,X,y,*,
+            max_iter=30,tol=1e-4,warm_start=False,**initial_guess):
         """
         ``fit`` method for ``d_LSR``.
 
@@ -96,18 +95,22 @@ class d_LSR(BaseEstimator):
         y : array-like of shape (n_samples,n_classes)
             The one-hot encoded target values.
 
-        initial_guess : (W0,b0)
-            Where,
-            W0 is array of shape (n_features,n_classes)
-            and b0 is array of shape (1,n_classes)
-
-            If no guess available, initialize with ``np.zeros()``.
-
         max_iter : int ; default 30
             The maximum number of iterations.
 
         tol : float ; default 1e-4
             The tolerence for convergence criterion.
+
+        warm_start : bool ; default=False
+            When set to True, reuse the solution of the previous call to ``fit`` as initialization,
+            otherwise, just erase the previous solution.
+
+        initial_guess : dict {'W0':W0,'t0':t0}
+            Where,
+            W0 is array of shape (n_features,n_classes)
+            and t0 is array of shape (1,n_classes)
+
+            If no guess available, initialize those with ``np.zeros()``.
 
         Returns
         -------
@@ -124,8 +127,12 @@ class d_LSR(BaseEstimator):
         history_ : dict containing informations about the last iteration.
         """
         ### initialization .....
-        W0,t0 = initial_guess
-        M = np.zeros_like(y,dtype=float)
+        if (warm_start and hasattr(self,'history_')) :
+            W0,t0 = self.history_['W0'],self.history_['t0']
+            M = self.history_['M']
+        else :
+            W0,t0 = initial_guess['W0'],initial_guess['t0']
+            M = np.zeros_like(y,dtype=float)
         ### Iterative Updates .....
         self.history_ = self._iterative_updates(max_iter,
                                                 X,y,
@@ -135,30 +142,6 @@ class d_LSR(BaseEstimator):
         self.intercept_ = self.history_['t0']
         return self
 
-
-    def update_itr(self,n_itr=1,tol=1e-4):
-        """
-        Update an existing run.
-
-        Parameters
-        ----------
-        n_itr : int ; default 1
-            The number of additional iterations.
-
-        tol : float ; default 1e-4
-            The tolerence for convergence criterion.
-
-        Returns
-        -------
-        self
-
-        """
-        self.history_ = self._iterative_updates(n_itr,
-                                                self.history_['X'],self.history_['y'],
-                                                self.coef_,self.intercept_,self.history_['M'],tol)
-        self.coef_ = self.history_['W0']
-        self.intercept_ = self.history_['t0']
-        return self
 
 
     def predict(self,X):
