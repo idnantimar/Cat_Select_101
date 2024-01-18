@@ -14,6 +14,8 @@ Topic: LASSO based Variable Selection, using (i)multinomial loss and (ii)One-vs-
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegressionCV,LogisticRegression
+import os
+from datetime import datetime
 from . import My_Template_FeatureImportance
 
 
@@ -195,7 +197,6 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
 
 
     def plot(self,sort=True,savefig=None,**kwargs):
-        ylabel = self.__class__.__name__+'|'+str(self.multi_class)
         kwargs.update({'ylabel':'vanillaLASSO_'+str(self.multi_class)})
         super().plot(sort=sort,savefig=savefig,**kwargs)
 
