@@ -45,7 +45,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 1.0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
@@ -61,7 +61,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
     _coef_to_importance = None
     _permutation_importance = None
     def __init__(self,*,
-                 max_features=None,threshold=1e-10):
+                 max_features=None,threshold=1.0):
         super().__init__()
         self.threshold = threshold
         self.max_features = max_features
