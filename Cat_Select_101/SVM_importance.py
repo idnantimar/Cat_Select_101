@@ -15,7 +15,7 @@ import pandas as pd
 from sklearn.svm import LinearSVC
 from sklearn.model_selection import GridSearchCV
 from sklearn.base import clone
-from .. import My_Template_FeatureImportance
+from . import My_Template_FeatureImportance
 
 
 
