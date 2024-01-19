@@ -3,7 +3,7 @@ Created on Thu Jan 11 23:46:38 2024
 
 Topic: Usually variable selection methods rely on the coefficients in some parametric model of Y|X=x.
        But for Categorical Response case, Nonparametric tests for homogeneity can be applied for variable selection.
-       This methods can specially work well for mis-specified models.
+       This methods can specially work well for misspecified models.
 
 @author: R.Nandi
 """
@@ -23,14 +23,13 @@ class SIS_importance(My_Template_FeatureImportance):
         Key Idea : In the setup of categorical response Y, a feature Xj is unimportant
         if Xj|Y=y are very similar for all categories y.
 
-        Note : This method only uses marginal utilities, ignoring joint covariance structure
+        Pros : Can be beneficial for misspecified models.
+
+        Cons : This method only uses marginal utilities, ignoring joint covariance structure
         of the features.
 
         Parameters
         ----------
-        random_state : int ; default None
-            Seed for reproducible results across multiple function calls.
-
         max_features : int ; default None
             The maximum possible number of selection. None implies no constrain,
             otherwise the `threshold` will be updated automatically if it attempts to
@@ -53,16 +52,15 @@ class SIS_importance(My_Template_FeatureImportance):
 
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,random_state=None,*,
-                 max_features=None,threshold=1e-10):
-        super().__init__(random_state)
+    def __init__(self,*,max_features=None,threshold=1e-10):
+        super().__init__()
         self.threshold = threshold
         self.max_features = max_features
 
 
     def fit(self,X,y):
         """
-        ``fit`` method for ``SIScat_importance``.
+        ``fit`` method for ``SIS_importance``.
 
         This method is extremely fast as it does not involve any cross-validation or hyperparameter tuning.
 
@@ -152,14 +150,13 @@ class SIScat_importance(My_Template_FeatureImportance):
         Key Idea : In the setup of categorical response Y, a feature Xj is unimportant
         if Xj|Y=y are very similar for all categories y.
 
-        Note : This method only uses marginal utilities, ignoring joint covariance structure
+        Pros : Can be beneficial for misspecified models.
+
+        Cons : This method only uses marginal utilities, ignoring joint covariance structure
         of the features.
 
         Parameters
         ----------
-        random_state : int ; default None
-            Seed for reproducible results across multiple function calls.
-
         max_features : int ; default None
             The maximum possible number of selection. None implies no constrain,
             otherwise the `threshold` will be updated automatically if it attempts to
@@ -184,8 +181,7 @@ class SIScat_importance(My_Template_FeatureImportance):
 
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,random_state=None,*,
-                 max_features=None,threshold=1e-10):
+    def __init__(self,*,max_features=None,threshold=1e-10):
         super().__init__(random_state)
         self.threshold = threshold
         self.max_features = max_features
@@ -193,7 +189,7 @@ class SIScat_importance(My_Template_FeatureImportance):
 
     def fit(self,X,y):
         """
-        ``fit`` method for ``SIS_importance``.
+        ``fit`` method for ``SIScat_importance``.
 
         This method is extremely fast as it does not involve any cross-validation or hyperparameter tuning.
 
