@@ -13,7 +13,7 @@ Topic: The ``CatBoost``,being widely used in machine learning, provides some imp
 
 from catboost import CatBoostClassifier
 from sklearn.base import clone
-from .. import My_Template_FeatureImportance
+from . import My_Template_FeatureImportance
 
 
 
