@@ -32,9 +32,11 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
 
         Note : This method can be considered as an unsupervised approximation of Fisher Score.
 
-        Pros : It does not depend on the scale of the features.
+        Pros : Can be applied in unsupervised learning case.
 
-        Cons : Importance can vary for different choice of `n_neighbors`.
+        Cons : Importance can vary for different choice of `n_neighbors`. Also unlike
+        Fisher Score, Laplacian Score is not scale invariant, since the `kneighbor_graph_`
+        can vary with different scales.
 
         Parameters
         ----------
@@ -54,7 +56,6 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         ----------
         ..[1] He, Xiaofei, Deng Cai, and Partha Niyogi. "Laplacian score for feature selection."
         Advances in neural information processing systems 18 (2005).
-
 
     """
     _coef_to_importance = None
@@ -78,7 +79,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         return np.exp(-scale_dist_sq)
 
 
-    def fit(self,X,*,n_neighbors=5,metric='euclidean',
+    def fit(self,X,*,n_neighbors=20,metric='euclidean',
             **kwargs_knn):
         """
         ``fit`` method for ``LaplacianScore_importance``.
@@ -89,7 +90,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
             The training input samples. If a DataFrame with categorical column is passed as input,
             `n_features_in_` will be number of columns after ``pd.get_dummies(X,drop_first=True)`` is applied.
 
-        n_neighbors : int ; default 5
+        n_neighbors : int ; default 20
             Number of neighbors to use.
 
         metric : str ; default 'euclidean'
@@ -110,15 +111,17 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         ### precomputed distance matrix .....
         dist_matrix = pairwise_distances(X,metric=metric)
         ### knn graph .....
+        ## node i & j are connected when atleast one is knn of the other
         KNN = NearestNeighbors(n_neighbors=n_neighbors,metric='precomputed',
                                **kwargs_knn)
         KNN.fit(dist_matrix)
         affinity = KNN.kneighbors_graph(mode='connectivity')
+        self.kneighbours_graph_ = (affinity + affinity.T).astype(bool)
         ### similarity scores .....
         S = self._similarity(dist_matrix)
-        S *= affinity.toarray()
+        S *= self.kneighbours_graph_.toarray()
         ### Laplacian Score .....
-        D = np.sum(S,axis=1)
+        D = np.sum(S,axis=1,keepdims=False)
         def for_jColumn(Xj):
             Xj -= np.dot(Xj,D)/np.sum(D)
             if any(Xj) :
