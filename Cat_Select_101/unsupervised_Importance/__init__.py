@@ -34,9 +34,9 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
 
         Pros : Can be applied in unsupervised learning case.
 
-        Cons : Importance can vary for different choice of `n_neighbors`. Also unlike
-        Fisher Score, Laplacian Score is not scale invariant, since the `kneighbor_graph_`
-        can vary with different scales.
+        Cons : Importances can vary for different choice of `n_neighbors`. Also unlike
+        Fisher Score, Laplacian Score is not scale invariant, since the `kneighbors_graph_`
+        can vary with varying scales of features.
 
         Parameters
         ----------
