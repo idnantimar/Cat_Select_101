@@ -63,7 +63,7 @@ class dLS_impotance(My_Template_FeatureImportance):
 
         Attribures
         ----------
-        best_penalty_ : the best value for inverse of regularization strength among `regularization`, when ``len(regularization)``>1
+        best_penalty_ : the best value for regularization strength among `regularization`, when ``len(regularization)``>1
 
         category_specific_importances_ : array of shape (`n_classes_`, `n_features_in_`)
             Feature importances specific to each target class.
