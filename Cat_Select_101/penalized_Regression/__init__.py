@@ -68,6 +68,17 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         random_state : int ; default None
             Seed for reproducible results across multiple function calls.
 
+        penalty_params : list
+            Possible values of `penalty_param` tuning the shape of custom penalty function.
+            The best one will be chosen by ``GridSearchCV``. For a list of length 1, it will be used as it is.
+
+        dtype : any ``tf`` float dtype ; default `tf.float64`
+            The dtype used in the underlying ``tensorflow`` neural network.
+
+        reduce_norm : non-zero int, inf, -inf ; default 1
+            Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
+            underlying Logistic Regression is of dimension 2. By default 'l1'-norm is being used.
+
         max_features : int ; default None
             The maximum possible number of selection. None implies no constrain,
             otherwise the `threshold` will be updated automatically if it attempts to
@@ -77,13 +88,26 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
+        compile_configuration : dict of keyword arguments for model compilation ; default {``'optimizer'``:'adam', ``'scoring'``:['accuracy']}
+            Must include ``optimizer`` and the ``metrics`` will be used to evaluate ``scoring`` in ``GridSearchCV``.
+
+        cv_configuration : dict of keyword arguments for ``GridSearchCV`` ; default ``{'cv':None,'verbose':2}``
+
     """
 
-    def __init__(self,random_state=None,*,
-                 max_features=None,threshold=1e-10):
+    def __init__(self,random_state=None,*,penalty_params=[0],dtype=tf.float64,
+                 reduce_norm=1,
+                 max_features=None,threshold=1e-10,
+                 compile_configuration={'optimizer':'adam','metrics':['accuracy']},
+                 cv_configuration={'cv':None,'verbose':2}):
         super().__init__(random_state)
+        self.penalty_params = penalty_params
+        self.dtype = dtype
+        self.reduce_norm = reduce_norm
         self.threshold = threshold
         self.max_features = max_features
+        self.compile_configuration = compile_configuration
+        self.cv_configuration = cv_configuration
 
 
     def penalty(self):
@@ -114,15 +138,20 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         return _custom_LogisticReg
 
 
-    def fit(self,X,y,penalty_params,*,epochs=100,verbose=0,dtype=tf.float32,
-            callbacks=None,
-            validation_split=0,validation_freq=1,validation_data=None,
-            cv=None,n_jobs=None,
-            reduce_norm=1,
-            initial_guess = LogisticRegression(penalty='l2',multi_class='multinomial',
-                                               solver='lbfgs',tol=1e-2),
-            compile_configuration={'optimizer':'adam','metrics':['accuracy']},
-            **fit_params):
+    def _initial_guess(self):
+        """
+        Any classifier with a `coef_` and an `intercept_` attribute,
+        those will be used as ``kernel_initializer`` and ``bias_initializer``
+        of the underlying neural network to leverage the training.
+
+        [ Override it accordingly ]
+
+        Default choice is ``LogisticRegression(penalty='l2',multi_class='multinomial',solver='lbfgs',tol=1e-2)``
+        """
+        return LogisticRegression(penalty='l2',multi_class='multinomial',solver='lbfgs',tol=1e-2)
+
+
+    def fit(self,X,y,*,epochs=100,**fit_params):
         """
         ``fit`` method for the Logistic Regression with custom penalty.
 
@@ -142,50 +171,11 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         y : Series of shape (n_samples,)
             The target values.
 
-        penalty_params : list
-            Possible values of `penalty_param` tuning the shape of custom penalty function.
-            The best one will be chosen by ``GridSearchCV``. For a list of length 1, it will be used as it is.
-
         epochs : int ; default 100
             The number of iterations the model will be trained.
 
-        verbose : int ; default 0
-            The verbosity level of training.
-
-        dtype : any ``tf`` float dtype ; default `tf.float32`
-            The dtype used in the underlying ``tensorflow`` neural network.
-
-        callbacks : list of keras.callbacks.Callback instances ; default None
-            List of callbacks to apply during training.
-
-        validation_split : float in [0,1) ; default 0
-            Fraction of the training data to be used as validation data.
-
-        validation_data : tuple like (X_val,y_val) ; default None
-            Data on which to evaluate the loss and any model metrics at the end of each epoch.
-
-        validation_freq : int ; default 1
-            Specifies how many training epochs to run before a new validation run is performed.
-
-        cv : int, cross-validation generator or an iterable ; default None
-            Determines the cross-validation splitting strategy in ``GridSearchCV``
-
-        n_jobs : int ; default None
-            Number of CPU cores used during the cross-validation loop in ``GridSearchCV``.
-
-        reduce_norm : non-zero int, inf, -inf ; default 1
-            Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
-            underlying Logistic Regression is of dimension 2. By default 'l1'-norm is being used.
-
-        initial_guess : default ``LogisticRegression(penalty='l2',multi_class='multinomial',solver='lbfgs',tol=1e-2)``
-            Any classifier with a `coef_` and an `intercept_` attribute,
-            those will be used as ``kernel_initializer`` and ``bias_initializer``
-            of the underlying neural network to leverage the training.
-
-        compile_configuration : dict of arguments for model compilation ; default {``'optimizer'``:'adam', ``'scoring'``:['accuracy']}
-            Must include ``optimizer`` and the ``metrics`` will be used to evaluate ``scoring`` in ``GridSearchCV``.
-
-        **fit_params : other keyword arguments for ``fit`` method of underlying neural network.
+        **fit_params : other keyword arguments, like- callback,validation_split,verbose etc.
+        for ``fit`` method of underlying neural network.
 
         Returns
         -------
@@ -193,22 +183,16 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             The fitted instance is returned.
 
         """
-        X = pd.get_dummies(X,drop_first=True,dtype=dtype.as_numpy_dtype)
+        X = pd.get_dummies(X,drop_first=True,dtype=self.dtype.as_numpy_dtype)
         super().fit(X,y)
+        initial_guess = self._initial_guess()
         warnings.filterwarnings("ignore", category=ConvergenceWarning)
         initial_guess.fit(X, y)
         warnings.filterwarnings("default", category=ConvergenceWarning)
         y = pd.get_dummies(y,drop_first=False,dtype=int)
-        if validation_data is not None :
-            X_val,y_val = validation_data
-            X_val = pd.get_dummies(X_val,drop_first=True,dtype=dtype.as_numpy_dtype)
-            y_val = pd.get_dummies(y_val,drop_first=False,dtype=int)
-            validation_data = (tf.convert_to_tensor(X_val),tf.convert_to_tensor(y_val))
-
 
         fit_configuration = {'weights0':initial_guess.coef_.T,'bias0':initial_guess.intercept_,
-                             'epochs':epochs,'verbose':verbose,'callbacks':callbacks,
-                             'validation_split':validation_split,'validation_freq':validation_freq,
+                             'epochs':epochs,
                              'shuffle':(self.random_state is None)}
         fit_configuration.update(**fit_params)
 
@@ -216,16 +200,16 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         estimator = Estimator(n_features_in=self.n_features_in_,
                                  n_classes=self.n_classes_,
                                  penalty_class=self.penalty(),
-                                 compile_configuration=compile_configuration,
-                                 penalty_param=penalty_params[0],
+                                 compile_configuration=self.compile_configuration,
+                                 penalty_param=self.penalty_params[0],
                                  random_state=self.random_state,
-                                 dtype = dtype)
+                                 dtype=self.dtype)
                     ## this estimator is an _custom_LogisticReg() instance, imported from _utils
 
-        if len(penalty_params)>1 :
-            crossvalidation_configuration = {'cv':cv,'n_jobs':n_jobs,'verbose':2*bool(verbose),'refit':True}
-            self.gridsearch = GridSearchCV(estimator,param_grid={'penalty_param':penalty_params},
-                                           **crossvalidation_configuration)
+        if len(self.penalty_params)>1 :
+            self.cv_configuration.update({'refit':True})
+            self.gridsearch = GridSearchCV(estimator,param_grid={'penalty_param':self.penalty_params},
+                                           **self.cv_configuration)
             self.gridsearch.fit(X,y,**fit_configuration)
             self.estimator = self.gridsearch.best_estimator_.nn
                     ## this self.estimator is the best fitted neural network
@@ -235,14 +219,11 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             estimator.fit(X,y,**fit_configuration)
             self.estimator = estimator.nn
                     ## skip the GridSearch when only one possible penalty_param is given
-            self.best_penalty_ = penalty_params[0]
 
         self.coef_ = (self.estimator.weights[0]).numpy().T
         self.intercept_ = (self.estimator.weights[1]).numpy().T
-        self._reduce_norm = reduce_norm
-        self._dtype = dtype
         self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                             reduce_norm,identifiability=False)
+                                                             self.reduce_norm,identifiability=False)
         return self
 
 
@@ -274,7 +255,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
         """
         X_test,y_test = test_data
-        X_test = tf.convert_to_tensor(pd.get_dummies(X_test,drop_first=True,dtype=self._dtype))
+        X_test = tf.convert_to_tensor(pd.get_dummies(X_test,drop_first=True,dtype=self.dtype.as_numpy_dtype))
         y_test = pd.Categorical(y_test,categories=self.classes_)
         y_test = tf.convert_to_tensor(pd.get_dummies(y_test,drop_first=False,dtype=int))
         return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
@@ -299,7 +280,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             self.get_permutation_importances(**kwargs_pimp)
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                                 self._reduce_norm,identifiability=False)
+                                                                 self.reduce_norm,identifiability=False)
 
 
     def transform(self,X):
@@ -307,13 +288,13 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         return super().transform(X)
 
 
-    def get_error_rates(self,true_coef,*,plot=False):
+    def get_error_rates(self,true_imp,*,plot=False):
         """
         Computes various error-rates when true importance of the features are known.
 
         Parameters
         ----------
-        true_coef : array of shape (`n_features_in_`,)
+        true_imp : array of shape (`n_features_in_`,)
             If a boolean array , True implies the feature is important in true model, null feature otherwise.
             If a array of floats , it represent the `feature_importances_` of the true model.
 
@@ -324,19 +305,23 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         -------
         dict
             Returns the empirical estimate of various error-rates
-           {'PCER': per-comparison error rate,
-            'FDR': false discovery rate,
-            'PFER': per-family error rate,
-            'TPR': true positive rate
+           {
+               'PCER': per-comparison error rate,
+
+                'FDR': false discovery rate,
+
+                'PFER': per-family error rate,
+
+                'TPR': true positive rate
             }
 
         """
         self.get_support()
-        self.true_coef = np.array(true_coef)
-        if (self.true_coef.dtype==bool) :
-            self.true_support = self.true_coef
+        true_imp = np.array(true_imp)
+        if (true_imp.dtype==bool) :
+            self.true_support = true_imp
         else :
-            self.true_support = (self.true_coef >= self.threshold_)
+            self.true_support = (true_imp >= self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
