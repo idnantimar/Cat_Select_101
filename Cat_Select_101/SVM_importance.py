@@ -39,6 +39,16 @@ class L1SVM_importance(My_Template_FeatureImportance):
         random_state : int ; default None
             Seed for reproducible results across multiple function calls.
 
+        Cs : list ; default [1.0]
+            The inverse of the regularization strength.
+
+        cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'verbose':2}``
+            Will be used when `Cs` has to be determined by crossvalidation.
+
+        reduce_norm : non-zero int, inf, -inf ; default 1
+            Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
+            underlying SVM is of dimension 2. By default 'l1'-norm is being used.
+
         max_features : int ; default None
             The maximum possible number of selection. None implies no constrain,
             otherwise the `threshold` will be updated automatically if it attempts to
@@ -48,6 +58,92 @@ class L1SVM_importance(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
+        Attribures
+        ----------
+        C_ : the best value for inverse of regularization strength among `Cs`, when ``len(Cs)``>1
+
+        category_specific_importances_ : array of shape (`n_classes_`, `n_features_in_`)
+            Feature importances specific to each target class.
+
+        classes_ : array of shape (`n_classes_`,)
+            A list of class labels known to the classifier.
+
+        coef_ : array of shape (`n_classes_`, `n_features_in_`)
+            Coefficient of the features in the decision function.
+
+        confusion_matrix_for_features_ : array of shape (`n_features_in_`, `n_features_in_`)
+            ``confusion_matrix`` (`true_support`, `support_`)
+
+        estimator : a fitted ``LinearSVC(...)`` instance
+
+        false_discoveries_ : array of shape (`n_features_in_`,)
+            Boolean mask of false positives.
+
+        false_negatives_ : array of shape (`n_features_in_`,)
+            Boolean mask of false negatives.
+
+        fdr_ : float
+            1 - ``precision_score`` (`true_support`, `support_`)
+
+        feature_importances_ : array of shape (`n_features_in_`,)
+            Importances of features.
+
+        feature_names_in_ : array of shape (`n_features_in_`,)
+            Names of features seen during ``fit``.
+
+        features_selected_ : array of shape (`n_features_selected_`,)
+            Names of selected features.
+
+        f1_score_for_features_ : float
+            ``f1_score`` (`true_support`, `support_`)
+
+        gridsearch : a fitted ``GridSearchCV(...)`` object, available when ``len(Cs)``>1
+
+        intercept_ : array of shape (n_classes,)
+            Intercept added to the decision function.
+
+        minimum_model_size_ : int
+            ``np.max`` (`ranking_` [ `true_support` ])
+
+        n_classes_ : int
+            Number of target classes.
+
+        n_false_negatives_ : int
+            Number of false negatives.
+
+        n_features_in_ : array of shape (`n_features_in_`,)
+            Number of features seen during ``fit``.
+
+        n_features_selected_ : int
+            Number of selected features.
+
+        n_samples_ : int
+            Number of observations seen during ``fit``.
+
+        pcer_ : float
+            ``np.mean`` (`false_discoveries_`)
+
+        pfer_ : int
+            ``np.sum`` (`false_discoveries_`)
+
+        ranking_ : array of shape (`n_features_in_`,)
+            The feature ranking, such that ``ranking_[i]`` corresponds to the
+            i-th best feature, i=1,2,..., `n_features_in_`.
+
+        support_ : array of shape (`n_features_in_`,)
+            Boolean mask of selected features.
+
+        threshold_ : float
+            Cut-off in use, for selection/rejection.
+
+        tpr_ : float
+            ``recall_score`` (`true_support`, `support_`)
+
+        true_support : array of shape (`n_features_in_`,)
+            Boolean mask of active features in population, only available after
+            ``get_error_rates`` method is called with true_imp.
+
+
         References
         ----------
         ..[1] Zhu, Ji, et al. "1-norm support vector machines." Advances in
@@ -56,16 +152,18 @@ class L1SVM_importance(My_Template_FeatureImportance):
     """
     Estimator_Type = LinearSVC(penalty='l1',dual=False,multi_class='ovr')
 
-    def __init__(self,random_state=None,*,
+    def __init__(self,random_state=None,*,Cs=[1.0],cv_config={'cv':None,'verbose':2},
+                 reduce_norm=1,
                  max_features=None,threshold=1e-10):
         super().__init__(random_state)
+        self.Cs = Cs
+        self.cv_config = cv_config
+        self.reduce_norm = reduce_norm
         self.max_features=max_features
         self.threshold=threshold
 
 
-    def fit(self,X,y,Cs=[1.0],*,
-            cv_config={'cv':None,'n_jobs':None,'verbose':2},
-            reduce_norm=1):
+    def fit(self,X,y):
         """
         ``fit`` method for ``L1SVM_importance``
 
@@ -78,16 +176,6 @@ class L1SVM_importance(My_Template_FeatureImportance):
         y : Series of shape (n_samples,)
             The target values.
 
-        Cs : list ; default [1.0]
-            The inverse of the regularization strength.
-
-        cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'n_jobs':None,'verbose':2}``
-            Will be used when `Cs` has to be determined by crossvalidation.
-
-        reduce_norm : non-zero int, inf, -inf ; default 1
-            Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
-            underlying SVM is of dimension 2. By default 'l1'-norm is being used.
-
         Returns
         -------
         self
@@ -98,26 +186,25 @@ class L1SVM_importance(My_Template_FeatureImportance):
         super().fit(X,y)
         ### assigning the estimator .....
         estimator = clone(self.Estimator_Type)
-        estimator.set_params(C=Cs[0],random_state=self.random_state)
+        estimator.set_params(C=self.Cs[0],random_state=self.random_state)
         ### fitting the model .....
-        if len(Cs)>1 :
-            cv_config.update({'refit':True})
+        if len(self.Cs)>1 :
+            self.cv_config.update({'refit':True})
             self.gridsearch = GridSearchCV(estimator,
-                                           param_grid={'C':Cs},
-                                           **cv_config)
+                                           param_grid={'C':self.Cs},
+                                           **self.cv_config)
             self.gridsearch.fit(X,y)
             self.estimator = self.gridsearch.best_estimator_
             self.C_ = self.gridsearch.best_params_['C']
         else :
             estimator.fit(X,y)
             self.estimator = estimator
-            self.C_ = Cs[0]
         ### feature_importances .....
         self.coef_ = self.estimator.coef_
         self.intercept_ = self.estimator.intercept_
         self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                             reduce_norm,identifiability=True)
-        self.category_specific_importances_ = np.abs(self.coef_)**reduce_norm
+                                                             self.reduce_norm,identifiability=True)
+        self.category_specific_importances_ = np.abs(self.coef_)**self.reduce_norm
         return self
 
 
@@ -160,37 +247,47 @@ class L1SVM_importance(My_Template_FeatureImportance):
             return super().transform(X)
 
 
-        def get_error_rates(self,true_coef,*,plot=False):
-            """
-            Computes various error-rates when true importance of the features are known.
+    def get_error_rates(self,true_imp,*,plot=False):
+        """
+        Computes various error-rates when true importance of the features are known.
 
-            Parameters
-            ----------
-            true_coef : array of shape (`n_features_in_`,)
-                If a boolean array , True implies the feature is important in true model, null feature otherwise.
-                If a array of floats , it represent the `feature_importances_` of the true model.
+        *   If a feature is True in `support_` and False in `true_support`
+            it is a false-discovery or false +ve
 
-            plot : bool ; default False
-                Whether to plot the `confusion_matrix_for_features_`.
+        *   If a feature is False in `support_` and True in `true_support`
+            it is a false -ve
 
-            Returns
-            -------
-            dict
-                Returns the empirical estimate of various error-rates
-               {'PCER': per-comparison error rate,
-                'FDR': false discovery rate,
-                'PFER': per-family error rate,
-                'TPR': true positive rate
-                }
+        Parameters
+        ----------
+        true_imp : array of shape (`n_features_in_`,)
+            If a boolean array , True implies the feature is important in true model, null feature otherwise.
+            If an array of floats , it represent the `feature_importances_` of the true model.
 
-            """
-            self.get_support()
-            self.true_coef = np.array(true_coef)
-            if (self.true_coef.dtype==bool) :
-                self.true_support = self.true_coef
-            else :
-                self.true_support = (self.true_coef >= self.threshold_)
-            return super().get_error_rates(plot=plot)
+        plot : bool ; default False
+            Whether to plot the `confusion_matrix_for_features_`.
+
+        Returns
+        -------
+        dict
+            Returns the empirical estimate of various error-rates
+           {
+               'PCER': per-comparison error rate,
+
+               'FDR': false discovery rate,
+
+               'PFER': per-family error rate,
+
+               'TPR': true positive rate
+            }
+
+        """
+        self.get_support()
+        true_imp = np.array(true_imp)
+        if (true_imp.dtype==bool) :
+            self.true_support = true_imp
+        else :
+            self.true_support = (true_imp >= self.threshold_)
+        return super().get_error_rates(plot=plot)
 
 
 
