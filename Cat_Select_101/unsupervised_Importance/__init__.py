@@ -40,6 +40,12 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
 
         Parameters
         ----------
+        n_neighbors : int ; default 20
+            Number of neighbors to use.
+
+        metric : str ; default 'euclidean'
+            The metric to use in ``sklearn.metrics.pairwise_distances()``.
+
         max_features : int ; default None
             The maximum possible number of selection. None implies no constrain,
             otherwise the `threshold` will be updated automatically if it attempts to
@@ -49,8 +55,79 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
+        kwargs_knn : dict ; default {}
+            dict of other keyword arguments to ``sklearn.neighbors.NearestNeighbors()``.
+
+
         Attribures
         ----------
+        confusion_matrix_for_features_ : array of shape (`n_features_in_`, `n_features_in_`)
+            ``confusion_matrix`` (`true_support`, `support_`)
+
+        estimator : a fitted ``NearsestNeighbors(...)`` instance
+
+        false_discoveries_ : array of shape (`n_features_in_`,)
+            Boolean mask of false positives.
+
+        false_negatives_ : array of shape (`n_features_in_`,)
+            Boolean mask of false negatives.
+
+        fdr_ : float
+            1 - ``precision_score`` (`true_support`, `support_`)
+
+        feature_importances_ : array of shape (`n_features_in_`,)
+            Importances of features.
+
+        feature_names_in_ : array of shape (`n_features_in_`,)
+            Names of features seen during ``fit``.
+
+        features_selected_ : array of shape (`n_features_selected_`,)
+            Names of selected features.
+
+        f1_score_for_features_ : float
+            ``f1_score`` (`true_support`, `support_`)
+
+        kneighbours_graph_ : csr matrix of shape (`n_samples_`, `n_samples_`)
+            [i,j] element is True if i-th sample is neighbor of j-th sample or
+            j-th sample is neighbor of i-th sample, False otherwise.
+
+        minimum_model_size_ : int
+            ``np.max`` (`ranking_` [ `true_support` ])
+
+        n_false_negatives_ : int
+            Number of false negatives.
+
+        n_features_in_ : array of shape (`n_features_in_`,)
+            Number of features seen during ``fit``.
+
+        n_features_selected_ : int
+            Number of selected features.
+
+        n_samples_ : int
+            Number of observations seen during ``fit``.
+
+        pcer_ : float
+            ``np.mean`` (`false_discoveries_`)
+
+        pfer_ : int
+            ``np.sum`` (`false_discoveries_`)
+
+        ranking_ : array of shape (`n_features_in_`,)
+            The feature ranking, such that ``ranking_[i]`` corresponds to the
+            i-th best feature, i=1,2,..., `n_features_in_`.
+
+        support_ : array of shape (`n_features_in_`,)
+            Boolean mask of selected features.
+
+        threshold_ : float
+            Cut-off in use, for selection/rejection.
+
+        tpr_ : float
+            ``recall_score`` (`true_support`, `support_`)
+
+        true_support : array of shape (`n_features_in_`,)
+            Boolean mask of active features in population, only available after
+            ``get_error_rates`` method is called with true_imp.
 
         References
         ----------
@@ -60,11 +137,16 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
     """
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,*,
-                 max_features=None,threshold=1.0):
+    def __init__(self,*,n_neighbors=20,metric='euclidean',
+                 max_features=None,threshold=1.0,
+                 kwargs_knn={}):
         super().__init__()
-        self.threshold = threshold
+        self.n_neighbors = n_neighbors
+        self.metric = metric
         self.max_features = max_features
+        self.threshold = threshold
+        self.kwargs_knn = kwargs_knn
+
 
     def _similarity(self,dist_matrix):
         """
@@ -79,8 +161,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         return np.exp(-scale_dist_sq)
 
 
-    def fit(self,X,*,n_neighbors=20,metric='euclidean',
-            **kwargs_knn):
+    def fit(self,X,y=None):
         """
         ``fit`` method for ``LaplacianScore_importance``.
 
@@ -90,13 +171,8 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
             The training input samples. If a DataFrame with categorical column is passed as input,
             `n_features_in_` will be number of columns after ``pd.get_dummies(X,drop_first=True)`` is applied.
 
-        n_neighbors : int ; default 20
-            Number of neighbors to use.
-
-        metric : str ; default 'euclidean'
-            The metric to use in ``sklearn.metrics.pairwise_distances()``.
-
-        **kwargs_knn : other keyword arguments to ``sklearn.neighbors.NearestNeighbors()``.
+        y : None
+            Ignored.
 
         Returns
         -------
@@ -109,11 +185,11 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         self.n_samples_,self.n_features_in_ = X.shape
         X = X.to_numpy()
         ### precomputed distance matrix .....
-        dist_matrix = pairwise_distances(X,metric=metric)
+        dist_matrix = pairwise_distances(X,metric=self.metric)
         ### knn graph .....
         ## node i & j are connected when atleast one is knn of the other
-        KNN = NearestNeighbors(n_neighbors=n_neighbors,metric='precomputed',
-                               **kwargs_knn)
+        KNN = NearestNeighbors(n_neighbors=self.n_neighbors,metric='precomputed',
+                               **self.kwargs_knn)
         KNN.fit(dist_matrix)
         affinity = KNN.kneighbors_graph(mode='connectivity')
         self.kneighbours_graph_ = (affinity + affinity.T).astype(bool)
@@ -136,6 +212,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
                 return 0
 
         ### iterating over the columns .....
+        self.estimator = KNN
         self.feature_importances_ = np.apply_along_axis(for_jColumn,
                                                         axis=0,arr=X)
         return self
@@ -146,15 +223,42 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         return super().transform(X)
 
 
-    def get_error_rates(self,true_coef,*,plot=False):
+    def fit_transform(self,X,y=None):
         """
-        Computes various error-rates when true importance of the features are known.
+        ``fit`` the data (X,y) then ``transform`` X.
 
         Parameters
         ----------
-        true_coef : array of shape (`n_features_in_`,)
+        X : DataFrame of shape (n_samples, n_features)
+            The training input samples.
+
+        y : None
+            Ignored.
+
+        Returns
+        -------
+        DataFrame of shape (n_samples, n_selected_features)
+            The input samples with only the selected features.
+
+        """
+        super().fit_transform(X,None)
+
+
+    def get_error_rates(self,true_imp,*,plot=False):
+        """
+        Computes various error-rates when true importance of the features are known.
+
+        *   If a feature is True in `support_` and False in `true_support`
+            it is a false-discovery or false +ve
+
+        *   If a feature is False in `support_` and True in `true_support`
+            it is a false -ve
+
+        Parameters
+        ----------
+        true_imp : array of shape (`n_features_in_`,)
             If a boolean array , True implies the feature is important in true model, null feature otherwise.
-            If a array of floats , it represent the `feature_importances_` of the true model.
+            If an array of floats , it represent the `feature_importances_` of the true model.
 
         plot : bool ; default False
             Whether to plot the `confusion_matrix_for_features_`.
@@ -163,20 +267,25 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         -------
         dict
             Returns the empirical estimate of various error-rates
-           {'PCER': per-comparison error rate,
-            'FDR': false discovery rate,
-            'PFER': per-family error rate,
-            'TPR': true positive rate
+           {
+               'PCER': per-comparison error rate,
+
+               'FDR': false discovery rate,
+
+               'PFER': per-family error rate,
+
+               'TPR': true positive rate
             }
 
         """
         self.get_support()
-        self.true_coef = np.array(true_coef)
-        if (self.true_coef.dtype==bool) :
-            self.true_support = self.true_coef
+        true_imp = np.array(true_imp)
+        if (true_imp.dtype==bool) :
+            self.true_support = true_imp
         else :
-            self.true_support = (self.true_coef >= self.threshold_)
+            self.true_support = (true_imp >= self.threshold_)
         return super().get_error_rates(plot=plot)
+
 
 
 
