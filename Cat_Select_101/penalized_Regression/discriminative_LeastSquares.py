@@ -231,6 +231,7 @@ class dLS_impotance(My_Template_FeatureImportance):
         self.intercept_ = self.estimator.intercept_.ravel()
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              self.reduce_norm,identifiability=True)
+        self.category_specific_importances_ = np.abs(self.coef_)**self.reduce_norm
         return self
 
 
