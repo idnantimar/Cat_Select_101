@@ -35,7 +35,7 @@ class dLS_impotance(My_Template_FeatureImportance):
         regularization : list ; default [0.1]
             The strength of regularization.
 
-        cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'n_jobs':None,'verbose':2}``
+        cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'verbose':2}``
             Will be used when `regularization` has to be determined by crossvalidation.
 
         max_iter : int ; default 30
