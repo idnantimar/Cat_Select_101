@@ -118,6 +118,19 @@ class MCP_importance(My_Template_FeatureImportance):
         random_state : int ; default None
             Seed for reproducible results across multiple function calls.
 
+        mcp_strength : list ; default [1.]
+            Tuning parameter controlling the strength of MCP penalty.
+
+        mcp_concavity : list ; default [3.]
+            Tuning parameter controlling the concavity of MCP penalty.
+
+        cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'verbose':2}``
+            Will be used when `mcp_strength` or `mcp_concavity` has to be determined by crossvalidation.
+
+        reduce_norm : non-zero int, inf, -inf ; default 1
+            Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
+            underlying Logistic Regression is of dimension 2. By default 'l1'-norm is being used.
+
         max_features : int ; default None
             The maximum possible number of selection. None implies no constrain,
             otherwise the `threshold` will be updated automatically if it attempts to
@@ -126,6 +139,93 @@ class MCP_importance(My_Template_FeatureImportance):
         threshold : float ; default 1e-10
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+
+        Attribures
+        ----------
+        best_penalty_ : the best value for regularization strength among `mcp_strength` or `mcp_concavity`,
+        when ``len(mcp_strength)``>1 or ``len(mcp_convavity)``>1
+
+        classes_ : array of shape (`n_classes_`,)
+            A list of class labels known to the classifier.
+
+        coef_ : array of shape (`n_classes_`-1, `n_features_in_`)
+            Coefficient of the features in the decision function, considering last class as baseline.
+
+        confusion_matrix_for_features_ : array of shape (`n_features_in_`, `n_features_in_`)
+            ``confusion_matrix`` (`true_support`, `support_`)
+
+        estimator : a fitted ``_Estimator(...)`` instance, having ``predict_proba`` and ``score`` method
+
+        false_discoveries_ : array of shape (`n_features_in_`,)
+            Boolean mask of false positives.
+
+        false_negatives_ : array of shape (`n_features_in_`,)
+            Boolean mask of false negatives.
+
+        fdr_ : float
+            1 - ``precision_score`` (`true_support`, `support_`)
+
+        feature_importances_ : array of shape (`n_features_in_`,)
+            Importances of features.
+
+        feature_names_in_ : array of shape (`n_features_in_`,)
+            Names of features seen during ``fit``.
+
+        features_selected_ : array of shape (`n_features_selected_`,)
+            Names of selected features.
+
+        f1_score_for_features_ : float
+            ``f1_score`` (`true_support`, `support_`)
+
+        gridsearch : a fitted ``GridSearchCV(...)`` object, available when
+        ``len(mcp_strength)``>1 or ``len(mcp_convavity)``>1
+
+        intercept_ : array of shape (`n_classes_`-1,)
+            Intercept added to the decision function, considering last class as baseline.
+
+        minimum_model_size_ : int
+            ``np.max`` (`ranking_` [ `true_support` ])
+
+        n_classes_ : int
+            Number of target classes.
+
+        n_false_negatives_ : int
+            Number of false negatives.
+
+        n_features_in_ : array of shape (`n_features_in_`,)
+            Number of features seen during ``fit``.
+
+        n_features_selected_ : int
+            Number of selected features.
+
+        n_samples_ : int
+            Number of observations seen during ``fit``.
+
+        pcer_ : float
+            ``np.mean`` (`false_discoveries_`)
+
+        pfer_ : int
+            ``np.sum`` (`false_discoveries_`)
+
+        ranking_ : array of shape (`n_features_in_`,)
+            The feature ranking, such that ``ranking_[i]`` corresponds to the
+            i-th best feature, i=1,2,..., `n_features_in_`.
+
+        support_ : array of shape (`n_features_in_`,)
+            Boolean mask of selected features.
+
+        threshold_ : float
+            Cut-off in use, for selection/rejection.
+
+        tpr_ : float
+            ``recall_score`` (`true_support`, `support_`)
+
+        true_support : array of shape (`n_features_in_`,)
+            Boolean mask of active features in population, only available after
+            ``get_error_rates`` method is called with true_imp.
+
+
 
         References
         ----------
@@ -137,11 +237,17 @@ class MCP_importance(My_Template_FeatureImportance):
 
     """
 
-    def __init__(self,random_state=None,*,
+    def __init__(self,random_state=None,*,mcp_strength=[1.],mcp_concavity=[3.],
+                 cv_config={'cv':None,'verbose':2},
+                 reduce_norm=1,
                  max_features=None,threshold=1e-10):
         super().__init__(random_state)
         self.max_features=max_features
         self.threshold=threshold
+        self.mcp_strength = mcp_strength
+        self.mcp_concavity = mcp_concavity
+        self.cv_config = cv_config
+        self.reduce_norm = reduce_norm
 
 
     def _initial_guess(self,X,y):
@@ -178,10 +284,7 @@ class MCP_importance(My_Template_FeatureImportance):
         return _LogisticMCPRegression_PyMc
 
 
-    def fit(self,X,y,mcp_strength=[1.],mcp_concavity=[3.],*,
-            cv_config={'cv':None,'n_jobs':None,'verbose':2},
-            reduce_norm=1,
-            **fit_params):
+    def fit(self,X,y,**fit_params):
         """
         ``fit`` method for ``MCP_importance``
 
@@ -202,19 +305,6 @@ class MCP_importance(My_Template_FeatureImportance):
         y : Series of shape (n_samples,)
             The target values.
 
-        mcp_strength : list ; default [1.]
-            Tuning parameter controlling the strength of MCP penalty.
-
-        mcp_concavity : list ; default [3.]
-            Tuning parameter controlling the concavity of MCP penalty.
-
-        cv_config : dict of keyword arguments to ``GridSearchCV`` ; default ``{'cv':None,'n_jobs':None,'verbose':2}``
-            Will be used when `mcp_strength` or `mcp_concavity` has to be determined by crossvalidation.
-
-        reduce_norm : non-zero int, inf, -inf ; default 1
-            Order of the norm used to compute `feature_importances_` in the case where the `coef_` of the
-            underlying Logistic Regression is of dimension 2. By default 'l1'-norm is being used.
-
         **fit_params : other keyword arguments to ``_Estimator().fit(...)``.
 
         Returns
@@ -228,30 +318,28 @@ class MCP_importance(My_Template_FeatureImportance):
         ### assigning the estimator .....
         estimator = self._Estimator()
         estimator = estimator(self.n_classes_,
-                              mcp_strength[0],mcp_concavity[0],
+                              self.mcp_strength[0],self.mcp_concavity[0],
                               self.random_state)
         ### initial guess for MM algo .....
         W0 = self._initial_guess(X,y)
         ### fitting the model .....
         y = pd.get_dummies(y,dtype=int,drop_first=False)
-        if len(mcp_strength)>1 or len(mcp_concavity)>1 :
-            cv_config.update({'refit':True})
+        if len(self.mcp_strength)>1 or len(self.mcp_concavity)>1 :
+            self.cv_config.update({'refit':True})
             self.gridsearch = GridSearchCV(estimator,
-                                           param_grid={'strength':mcp_strength,'concavity':mcp_concavity},
-                                           **cv_config)
+                                           param_grid={'strength':self.mcp_strength,'concavity':self.mcp_concavity},
+                                           **self.cv_config)
             self.gridsearch.fit(X,y,W0=W0,**fit_params)
             self.estimator = self.gridsearch.best_estimator_
             self.best_penalty_ = self.gridsearch.best_params_
         else :
             estimator.fit(X,y,W0,**fit_params)
             self.estimator = estimator
-            self.best_penalty_ = {'strength':mcp_strength[0],'concavity':mcp_concavity[0]}
         ### feature_importances .....
         self.coef_ = self.estimator.coef_
         self.intercept_ = self.estimator.intercept_
-        self._reduce_norm = reduce_norm
         self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                             reduce_norm,identifiability=True)
+                                                             self.reduce_norm,identifiability=True)
         return self
 
 
@@ -308,7 +396,7 @@ class MCP_importance(My_Template_FeatureImportance):
             self.get_permutation_importances(**kwargs_pimp)
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
-                                                                 self._reduce_norm,identifiability=True)
+                                                                 self.reduce_norm,identifiability=True)
 
 
     def transform(self,X):
@@ -316,15 +404,21 @@ class MCP_importance(My_Template_FeatureImportance):
         return super().transform(X)
 
 
-    def get_error_rates(self,true_coef,*,plot=False):
+    def get_error_rates(self,true_imp,*,plot=False):
         """
         Computes various error-rates when true importance of the features are known.
 
+        *   If a feature is True in `support_` and False in `true_support`
+            it is a false-discovery or false +ve
+
+        *   If a feature is False in `support_` and True in `true_support`
+            it is a false -ve
+
         Parameters
         ----------
-        true_coef : array of shape (`n_features_in_`,)
+        true_imp : array of shape (`n_features_in_`,)
             If a boolean array , True implies the feature is important in true model, null feature otherwise.
-            If a array of floats , it represent the `feature_importances_` of the true model.
+            If an array of floats , it represent the `feature_importances_` of the true model.
 
         plot : bool ; default False
             Whether to plot the `confusion_matrix_for_features_`.
@@ -333,19 +427,23 @@ class MCP_importance(My_Template_FeatureImportance):
         -------
         dict
             Returns the empirical estimate of various error-rates
-           {'PCER': per-comparison error rate,
-            'FDR': false discovery rate,
-            'PFER': per-family error rate,
-            'TPR': true positive rate
+           {
+               'PCER': per-comparison error rate,
+
+               'FDR': false discovery rate,
+
+               'PFER': per-family error rate,
+
+               'TPR': true positive rate
             }
 
         """
         self.get_support()
-        self.true_coef = np.array(true_coef)
-        if (self.true_coef.dtype==bool) :
-            self.true_support = self.true_coef
+        true_imp = np.array(true_imp)
+        if (true_imp.dtype==bool) :
+            self.true_support = true_imp
         else :
-            self.true_support = (self.true_coef >= self.threshold_)
+            self.true_support = (true_imp >= self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
