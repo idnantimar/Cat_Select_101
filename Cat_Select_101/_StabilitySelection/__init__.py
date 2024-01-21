@@ -32,7 +32,6 @@ import warnings
 import matplotlib.pyplot as plt
 import os
 from datetime import datetime
-from ..vanilla_LASSO import vanillaLASSO_importance
 
 
 
@@ -118,7 +117,7 @@ class CPSS(TransformerMixin,BaseEstimator):
 
     """
     def __init__(self,base_estimator,
-                 n_resamples=20,*,verbose=True,
+                 n_resamples=50,*,verbose=True,
                  lambda_name=None,lambda_grid=None,
                  kwargs_Parallel={'n_jobs':None},random_state=None):
         self.base_estimator = base_estimator
