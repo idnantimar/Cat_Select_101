@@ -99,7 +99,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         f1_score_for_features_ : float
             ``f1_score`` (`true_support`, `support_`)
 
-        intercept_ : array of shape (n_classes,)
+        intercept_ : array of shape (`n_classes_`,)
             Intercept added to the decision function.
 
         minimum_model_size_ : int
@@ -111,7 +111,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         n_false_negatives_ : int
             Number of false negatives.
 
-        n_features_in_ : array of shape (`n_features_in_`,)
+        n_features_in_ : int
             Number of features seen during ``fit``.
 
         n_features_selected_ : int
