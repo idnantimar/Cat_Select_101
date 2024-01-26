@@ -155,6 +155,7 @@ class SIS_importance(My_Template_FeatureImportance):
         u = (u/class_probs) - 1
                 ## this will be useful for calculating [F(X|Y) - F(X)]
         def for_jColumn(Xj):
+            ## E_x[Var_y(F(Xj|Y))]
             out = 0
             for x in Xj :
                 v = np.mean((Xj<=x)*u,axis=-1,keepdims=True)
@@ -281,7 +282,7 @@ class SIScat_importance(My_Template_FeatureImportance):
         n_false_negatives_ : int
             Number of false negatives.
 
-        n_features_in_ : array of shape (`n_features_in_`,)
+        n_features_in_ : int
             Number of features seen during ``fit``.
 
         n_features_selected_ : int
@@ -326,7 +327,7 @@ class SIScat_importance(My_Template_FeatureImportance):
     _coef_to_importance = None
     _permutation_importance = None
     def __init__(self,*,max_features=None,threshold=1e-10):
-        super().__init__(random_state)
+        super().__init__()
         self.threshold = threshold
         self.max_features = max_features
 
@@ -361,16 +362,17 @@ class SIScat_importance(My_Template_FeatureImportance):
         u = (u/class_probs) - 1
                 ## this will be useful for calculating [P(X|Y) - P(X)]
         def for_jColumn(Xj):
-            out = 0
-            Xj = pd.get_dummies(Xj,dtype=bool,drop_first=False).to_numpy().T
-                ## each column is indicator for a predictor class label
-            Xj_probs = Xj.mean(axis=-1)
-                ## marginal pmf for Xj
-            for i in range(Xj.shape[0]) :
-                v = np.mean(Xj[i]*u,axis=-1,keepdims=True)
-                    ## this quantity is [P(X|Y) - P(X)]
-                out += np.sum(class_probs*(v**2),axis=None)*Xj_probs[i]
-            return out
+            ## E_x[Var_y(P(Xj|Y))]
+            Xj_ = pd.get_dummies(Xj,dtype=bool,drop_first=False)
+                # each column is indicator for a predictor class label
+            Xj_probs = Xj_.mean(axis=0)
+                # marginal pmf for Xj
+            out = np.apply_along_axis(_Var_Px_given_Y,axis=0,arr=Xj_)
+            return out.dot(Xj_probs)
+        def _Var_Px_given_Y(x):
+            ## variance(P(x|Y)) for a fixed category of Xj
+            v = np.mean(x*u,axis=-1,keepdims=True)
+            return np.sum(class_probs*(v**2),axis=None)
         ### iterating over the columns .....
         self.feature_importances_ = X.apply(for_jColumn,axis=0).to_numpy()
         return self
