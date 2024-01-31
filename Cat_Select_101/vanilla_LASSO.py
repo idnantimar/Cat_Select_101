@@ -16,7 +16,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegressionCV,LogisticRegression
 import os
 from datetime import datetime
-from . import My_Template_FeatureImportance
+from . import My_Template_FeatureImportance,_Data_driven_Thresholding
 
 
 
@@ -53,9 +53,14 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
-            A cut-off, any feature with importance below this value will be rejected,
-            otherwise will be selected.
+        threshold : float ; 0
+            A cut-off, any feature with importance exceeding this value will be selected,
+            otherwise rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
         set_params_LogisticReg : dict ; default {}
             dict of other keyword arguments to ``LogistiRegression()`` or ``LogistiRegressionCV()``
@@ -148,7 +153,8 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
 
     def __init__(self,random_state=None,*,multi_class='multinomial',Cs=list(np.logspace(-4,4,10)),
                  max_iter=1000,reduce_norm=1,
-                 max_features=None,threshold=1e-10,set_params_LogisticReg={}):
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.01,
+                 set_params_LogisticReg={}):
         super().__init__(random_state)
         self.multi_class = multi_class
         self.Cs = Cs
@@ -156,6 +162,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         self.reduce_norm = reduce_norm
         self.max_features = max_features
         self.threshold = threshold
+        self.cumulative_score_cutoff = cumulative_score_cutoff
         self.set_params_LogisticReg = set_params_LogisticReg
 
 
@@ -179,7 +186,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
 
         """
         X = pd.get_dummies(pd.DataFrame(X),drop_first=True,dtype=int)
-        super().fit(X,y,y_classes=True)
+        super().fit(X,y)
         ### fitting the model .....
         self.Estimator_Type.update(self.set_params_LogisticReg)
         if len(self.Cs)>1 :
@@ -208,6 +215,8 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
             self.feature_importances_ = self._coef_to_importance(self.coef_,self.reduce_norm,
                                                              identifiability=True)
             self.category_specific_importances_ = np.abs(self.coef_)**self.reduce_norm
+        ### ranking and threshold .....
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -240,8 +249,10 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         """
         X_test,y_test = test_data
         X_test = pd.get_dummies(pd.DataFrame(X_test),drop_first=True,dtype=int)
-        return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
+        out = super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
                                                scoring=None)
+        _Data_driven_Thresholding(self)
+        return out
 
 
     def transform(self,X):
@@ -288,7 +299,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
