@@ -41,21 +41,15 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
-        max_features : None
-            The maximum possible number of selection. None implies no constrain,
-            otherwise the `threshold` will be updated automatically if it attempts to
-            select more than `max_features`.
-
-    """
+     """
 
     threshold = 0
-    max_features = None
     def __init__(self,random_state=None):
         self.random_state = random_state
 
 
 
-    def fit(self,X,y,*,y_classes=True):
+    def fit(self,X,y):
         """
         This is a basic ``fit`` method , computing atributes `n_samples_`,`n_features_in_`, `feature_names_in_`,
         `classes_`, `n_classes_`.
@@ -71,18 +65,15 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         y : array-like of shape (n_samples,)
             The target values.
 
-        y_classes : bool , default True
-            Whether to obtain `classes_` and `n_classes_` for classification problems.
-
         """
+        ## delete 'feature_importances_' from previous fit ...
         if hasattr(self,'feature_importances_') :
             delattr(self,'feature_importances_')
-                ## delete 'feature_importances_' from previous fit
+        ## measure dimensions ...
         self.n_samples_,self.n_features_in_ = getattr(X,'shape')
         self.feature_names_in_ = getattr(X,'columns',None)
-        if y_classes :
-            self.classes_ = np.unique(y)
-            self.n_classes_ = len(self.classes_)
+        self.classes_ = np.unique(y)
+        self.n_classes_ = len(self.classes_)
 
 
 
@@ -109,21 +100,21 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
         """
         if not identifiability :
-        ## taking average over possible base-line categories ...
+            # taking average over possible base-line categories ...
             k,m = coef.shape
             out = np.zeros((m,))
             for row in coef:
                 out += np.linalg.norm(coef-row,ord=reduce_norm,axis=0)
             out /= k
         else :
-        ## base-line category already specified ...
+            # base-line category already specified ...
             out = np.linalg.norm(coef,ord=reduce_norm,axis=0)
-        ## feature importances ...
+        ## feature importances ....
         return out
 
 
 
-    def _permutation_importance(self,test_data,*,n_repeats=10,scoring=None):
+    def _permutation_importance(self,test_data,*,n_repeats=10,scoring=None,cumulative_score_cutoff=0.05):
         """
         This function calculates permutation based feature importances, assuming
         there is a fitted ``estimator``.
@@ -162,6 +153,65 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 
+    def _ranking(self):
+        """
+        The most important feature has rank=1,
+        The least important feature has rank='n_features_in_'.
+
+        If two features get exactly same importance (very rare),
+        they will still get distinct integer ranks, based on which one occured first
+
+        [ for internal use only ]
+
+
+        """
+        self.ranking_ = rankdata(-self.feature_importances_,method='ordinal')
+
+
+
+    def _bound_max_features(self,max_features):
+        """
+        Constrain the maximum possible number of selection by a given constant
+
+        Parameters
+        ----------
+        max_features : int ; default None
+            The maximum possible number of selection. None implies no constrain,
+            otherwise the `threshold` will be updated automatically if it attempts to
+            select more than `max_features`.
+
+        [ 'threshold_' will be updated inplace ]
+
+        """
+        if (self.max_features is not None) and (self.max_features < self.n_features_in_) :
+            self.threshold_ = max(self.feature_importances_[np.where(self.ranking_==(self.max_features+1))],
+                                  self.threshold_)
+
+
+
+    def _cumulative_score_threshold(self,cut_off=0.01):
+        """
+        'threshold_' for selecting those features that contributes to top
+        100*(1-cut_off)% feature importances.
+
+        Parameters
+        ----------
+        cut_off : float in [0,1) ; default 0.01
+
+        [ 'threshold_' will be updated inplace ]
+
+        NOTE : Result is not valid when all features
+        are unimportant.
+
+        """
+        importances_ = np.sort(self.feature_importances_)
+        n_select = (importances_.cumsum()/importances_.sum() >= cut_off).sum()
+        if n_select < self.n_features_in_ :
+            self.threshold_ = max(self.feature_importances_[np.where(self.ranking_==(n_select+1))],
+                                  self.threshold_)
+
+
+
     def _get_support_mask(self):
         """
         Get the boolean mask indicating which features are selected.
@@ -175,22 +225,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         """
         check_is_fitted(self,attributes="feature_importances_",
                         msg="The %(name)s instance must have a 'feature_importances_' attribute.")
-
-        ranking_ = rankdata(-self.feature_importances_,method='ordinal')
-                ## the most important feature has rank=1
-                 ## the least important feature has rank='n_features_in_'
-                ## if two features get exactly same importance (very rare),
-                ## they will still get distinct integer ranks, based on which one occured first
-        if (self.max_features is None) :
-            self.threshold_ = self.threshold
-        else:
-            cut_off = np.where(ranking_==self.max_features)
-            self.threshold_ = max(self.feature_importances_[cut_off],
-                                  self.threshold)
-                ## constrain the maximum possible number of selection
-                 ## by a given constant
-        self.support_ = (self.feature_importances_ >= self.threshold_)
-        self.ranking_ = ranking_
+        self.support_ = (self.feature_importances_ > self.threshold_)
         self.n_features_selected_ = self.support_.sum()
         if hasattr(self,'feature_names_in_') :
             self.features_selected_ = self.feature_names_in_[self.support_]
@@ -221,7 +256,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
     def fit_transform(self,X,y,**fit_params):
         """
-        ``fit`` the data (X,y) then ``transform`` X
+        ``fit`` the data (X,y) then ``transform`` X.
 
         Parameters
         ----------
@@ -405,4 +440,41 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 #### ==========================================================================
+##
+###
+####
+###
+##
+#### Data based Threshold =====================================================
 
+
+def _Data_driven_Thresholding(self,Steps=[0,1,2,3]):
+    """
+        Step0:  Resets `threshold_` to default value.
+        Step1:  Ranks the features based on their importances.
+        Step2:  Computes `threshold_` based on cumulative scores.
+        Step3:  Updates `threshold_` based on maximum number of selection (if any)
+
+        [ to avoid rewriting common steps again and again ]
+
+        NOTE: Based on same data (X,y) , if we want to compute `threshold_` for
+        different `max_features` or `cumulative_score_cutoff` we do not need to refit
+        the model since `feature_importances_` are not subject to change.
+
+        Example -
+            >>> model = vanilla_LASSO_importance(max_features=None)
+            >>> model.fit(X,y)  ## computing feature importances
+            >>> model.get_support()  ## feature selection for the first time
+            >>> setattr(model,'max_features',5)
+            >>> _Data_driven_Thresholding(model)
+            >>> model.get_support()  ## feature selection for the updated setup
+
+    """
+    ToDo = {0:lambda : setattr(self,'threshold_',self.threshold),
+            1:lambda : self._ranking(),
+            2:lambda : self._cumulative_score_threshold(self.cumulative_score_cutoff),
+            3:lambda : self._bound_max_features(self.max_features)}
+    for step in Steps : ToDo[step]()
+
+
+#### ==========================================================================
