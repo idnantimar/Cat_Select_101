@@ -453,7 +453,7 @@ def _Data_driven_Thresholding(self,Steps=[0,1,2,3]):
         Step0:  Resets `threshold_` to default value.
         Step1:  Ranks the features based on their importances.
         Step2:  Computes `threshold_` based on cumulative scores.
-        Step3:  Updates `threshold_` based on maximum number of selection (if any)
+        Step3:  Updates `threshold_` based on maximum number of selection (if any).
 
         [ to avoid rewriting common steps again and again ]
 
@@ -475,6 +475,8 @@ def _Data_driven_Thresholding(self,Steps=[0,1,2,3]):
             2:lambda : self._cumulative_score_threshold(self.cumulative_score_cutoff),
             3:lambda : self._bound_max_features(self.max_features)}
     for step in Steps : ToDo[step]()
+
+
 
 
 #### ==========================================================================
