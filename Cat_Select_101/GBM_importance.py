@@ -13,7 +13,7 @@ Topic: The ``CatBoost``,being widely used in machine learning, provides some imp
 
 from catboost import CatBoostClassifier
 from sklearn.base import clone
-from . import My_Template_FeatureImportance
+from . import My_Template_FeatureImportance,_Data_driven_Thresholding
 from ._utils.generate_Categorical import detect_Categorical
 
 
@@ -46,9 +46,14 @@ class cb_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
         configuration_cb : dict ; default {'depth':6,'l2_leaf_reg':3.0}
             dict of other keyword arguments to the initialization of ``CatBoostClassifier``.
@@ -138,7 +143,7 @@ class cb_importance(My_Template_FeatureImportance):
                                         boosting_type='Ordered',grow_policy='SymmetricTree')
     def __init__(self,random_state=None,*,iterations=500,learning_rate=0.03,
                  verbose=False,
-                 max_features=None,threshold=1e-10,
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.01,
                  configuration_cb={'depth':6,'l2_leaf_reg':3.0}):
         super().__init__(random_state)
         self.iterations = iterations
@@ -146,6 +151,7 @@ class cb_importance(My_Template_FeatureImportance):
         self.verbose = verbose
         self.threshold = threshold
         self.max_features = max_features
+        self.cumulative_score_cutoff = cumulative_score_cutoff
         self.configuration_cb = configuration_cb
 
 
@@ -161,7 +167,7 @@ class cb_importance(My_Template_FeatureImportance):
 
     def fit(self,X,y,**fit_params):
         """
-        ``fit`` method for ``cb_importance``
+        ``fit`` method for ``cb_importance``.
 
         Parameters
         ----------
@@ -192,6 +198,7 @@ class cb_importance(My_Template_FeatureImportance):
         estimator.fit(X,y,**fit_params)
         self.estimator = estimator
         self.feature_importances_ = self.estimator.feature_importances_
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -234,7 +241,7 @@ class cb_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
