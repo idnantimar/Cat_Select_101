@@ -84,7 +84,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
