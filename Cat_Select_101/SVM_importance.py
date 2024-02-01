@@ -15,7 +15,7 @@ import pandas as pd
 from sklearn.svm import LinearSVC
 from sklearn.model_selection import GridSearchCV
 from sklearn.base import clone
-from . import My_Template_FeatureImportance
+from . import My_Template_FeatureImportance,_Data_driven_Thresholding
 
 
 
@@ -54,9 +54,14 @@ class L1SVM_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
         Attribures
         ----------
@@ -154,18 +159,19 @@ class L1SVM_importance(My_Template_FeatureImportance):
 
     def __init__(self,random_state=None,*,Cs=[1.0],cv_config={'cv':None,'verbose':2},
                  reduce_norm=1,
-                 max_features=None,threshold=1e-10):
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.01):
         super().__init__(random_state)
         self.Cs = Cs
         self.cv_config = cv_config
         self.reduce_norm = reduce_norm
         self.max_features=max_features
+        self.cumulative_score_cutoff = cumulative_score_cutoff
         self.threshold=threshold
 
 
     def fit(self,X,y):
         """
-        ``fit`` method for ``L1SVM_importance``
+        ``fit`` method for ``L1SVM_importance``.
 
         Parameters
         ----------
@@ -205,6 +211,7 @@ class L1SVM_importance(My_Template_FeatureImportance):
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              self.reduce_norm,identifiability=True)
         self.category_specific_importances_ = np.abs(self.coef_)**self.reduce_norm
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -237,9 +244,11 @@ class L1SVM_importance(My_Template_FeatureImportance):
         """
         X_test,y_test = test_data
         X_test = pd.get_dummies(X_test,drop_first=True,dtype=int)
-        return super()._permutation_importance((X_test,y_test),
+        out = super()._permutation_importance((X_test,y_test),
                                                n_repeats=n_repeats,
                                                scoring=None)
+        _Data_driven_Thresholding(self)
+        return out
 
 
         def transform(self,X):
@@ -286,7 +295,7 @@ class L1SVM_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
