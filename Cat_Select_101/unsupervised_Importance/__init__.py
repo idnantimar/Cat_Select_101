@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import pairwise_distances
-from .. import My_Template_FeatureImportance
+from .. import My_Template_FeatureImportance,_Data_driven_Thresholding
 
 
 
@@ -51,9 +51,14 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1.0
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
         kwargs_knn : dict ; default {}
             dict of other keyword arguments to ``sklearn.neighbors.NearestNeighbors()``.
@@ -138,13 +143,14 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
     _coef_to_importance = None
     _permutation_importance = None
     def __init__(self,*,n_neighbors=20,metric='euclidean',
-                 max_features=None,threshold=1.0,
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.01,
                  kwargs_knn={}):
         super().__init__()
         self.n_neighbors = n_neighbors
         self.metric = metric
         self.max_features = max_features
         self.threshold = threshold
+        self.cumulative_score_cutoff = cumulative_score_cutoff
         self.kwargs_knn = kwargs_knn
 
 
@@ -164,6 +170,9 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
     def fit(self,X,y=None):
         """
         ``fit`` method for ``LaplacianScore_importance``.
+
+        [(1-L)/L -1] is used as feature_importances here.
+
 
         Parameters
         ----------
@@ -213,8 +222,9 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
 
         ### iterating over the columns .....
         self.estimator = KNN
-        self.feature_importances_ = np.apply_along_axis(for_jColumn,
+        self.feature_importances_ = -1 + np.apply_along_axis(for_jColumn,
                                                         axis=0,arr=X)
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -283,7 +293,7 @@ class LaplacianScore_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
