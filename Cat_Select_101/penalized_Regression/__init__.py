@@ -18,7 +18,7 @@ import warnings
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from .._utils._custom_LogisticReg import _custom_LogisticReg
-from .. import My_Template_FeatureImportance
+from .. import My_Template_FeatureImportance,_Data_driven_Thresholding
 
 
 
@@ -88,6 +88,11 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
+
         compile_configuration : dict of keyword arguments for model compilation ; default {``'optimizer'``:'adam', ``'scoring'``:['accuracy']}
             Must include ``optimizer`` and the ``metrics`` will be used to evaluate ``scoring`` in ``GridSearchCV``.
 
@@ -97,7 +102,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
     def __init__(self,random_state=None,*,penalty_params=[0],dtype=tf.float64,
                  reduce_norm=1,
-                 max_features=None,threshold=1e-10,
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.01,
                  compile_configuration={'optimizer':'adam','metrics':['accuracy']},
                  cv_configuration={'cv':None,'verbose':2}):
         super().__init__(random_state)
@@ -106,6 +111,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         self.reduce_norm = reduce_norm
         self.threshold = threshold
         self.max_features = max_features
+        self.cumulative_score_cutoff = cumulative_score_cutoff
         self.compile_configuration = compile_configuration
         self.cv_configuration = cv_configuration
 
@@ -224,6 +230,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         self.intercept_ = (self.estimator.weights[1]).numpy().T
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              self.reduce_norm,identifiability=False)
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -258,8 +265,10 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         X_test = tf.convert_to_tensor(pd.get_dummies(X_test,drop_first=True,dtype=self.dtype.as_numpy_dtype))
         y_test = pd.Categorical(y_test,categories=self.classes_)
         y_test = tf.convert_to_tensor(pd.get_dummies(y_test,drop_first=False,dtype=int))
-        return super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
+        out = super()._permutation_importance((X_test,y_test),n_repeats=n_repeats,
                                                scoring = lambda model,X,y : model.evaluate(X,y,verbose=0)[1])
+        _Data_driven_Thresholding(self)
+        return out
 
 
     def update_importance(self,imp_kind='coef',**kwargs_pimp):
@@ -281,6 +290,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                                  self.reduce_norm,identifiability=False)
+            _Data_driven_Thresholding(self)
 
 
     def transform(self,X):
@@ -321,7 +331,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
