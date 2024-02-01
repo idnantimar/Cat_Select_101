@@ -14,7 +14,7 @@ Topic: Usually variable selection methods rely on the coefficients in some param
 
 import numpy as np
 import pandas as pd
-from .. import My_Template_FeatureImportance
+from .. import My_Template_FeatureImportance,_Data_driven_Thresholding
 
 
 
@@ -35,9 +35,14 @@ class SIS_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
         Attribures
         ----------
@@ -119,10 +124,11 @@ class SIS_importance(My_Template_FeatureImportance):
 
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,*,max_features=None,threshold=1e-10):
+    def __init__(self,*,max_features=None,threshold=0,cumulative_score_cutoff=0.01):
         super().__init__()
         self.threshold = threshold
         self.max_features = max_features
+        self.cumulative_score_cutoff = cumulative_score_cutoff
 
 
     def fit(self,X,y):
@@ -166,6 +172,7 @@ class SIS_importance(My_Template_FeatureImportance):
         X = X.to_numpy()
         self.feature_importances_ = np.apply_along_axis(for_jColumn,
                                                         axis=0,arr=X)
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -208,7 +215,7 @@ class SIS_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
@@ -240,9 +247,14 @@ class SIScat_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
         Attribures
         ----------
@@ -326,10 +338,11 @@ class SIScat_importance(My_Template_FeatureImportance):
 
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,*,max_features=None,threshold=1e-10):
+    def __init__(self,*,max_features=None,threshold=1e-10,cumulative_score_cutoff=0.01):
         super().__init__()
         self.threshold = threshold
         self.max_features = max_features
+        self.cumulative_score_cutoff = cumulative_score_cutoff
 
 
     def fit(self,X,y):
@@ -375,6 +388,7 @@ class SIScat_importance(My_Template_FeatureImportance):
             return np.sum(class_probs*(v**2),axis=None)
         ### iterating over the columns .....
         self.feature_importances_ = X.apply(for_jColumn,axis=0).to_numpy()
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -417,7 +431,7 @@ class SIScat_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
