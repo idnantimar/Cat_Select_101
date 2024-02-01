@@ -16,7 +16,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
-from .. import My_Template_FeatureImportance
+from .. import My_Template_FeatureImportance,_Data_driven_Thresholding
 
 
 
@@ -136,9 +136,14 @@ class MCP_importance(My_Template_FeatureImportance):
             otherwise the `threshold` will be updated automatically if it attempts to
             select more than `max_features`.
 
-        threshold : float ; default 1e-10
+        threshold : float ; default 0
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
+
+        cumulative_score_cutoff : float in [0,1) ; default 0.01
+            Computes data-driven 'threshold' for selecting those features that contributes to top
+            100*(1-cut_off)% feature importances. Result is not valid when all features
+            are unimportant.
 
 
         Attribures
@@ -240,10 +245,11 @@ class MCP_importance(My_Template_FeatureImportance):
     def __init__(self,random_state=None,*,mcp_strength=[1.],mcp_concavity=[3.],
                  cv_config={'cv':None,'verbose':2},
                  reduce_norm=1,
-                 max_features=None,threshold=1e-10):
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.01):
         super().__init__(random_state)
         self.max_features=max_features
         self.threshold=threshold
+        self.cumulative_score_cutoff = cumulative_score_cutoff
         self.mcp_strength = mcp_strength
         self.mcp_concavity = mcp_concavity
         self.cv_config = cv_config
@@ -340,6 +346,7 @@ class MCP_importance(My_Template_FeatureImportance):
         self.intercept_ = self.estimator.intercept_
         self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                              self.reduce_norm,identifiability=True)
+        _Data_driven_Thresholding(self)
         return self
 
 
@@ -373,9 +380,11 @@ class MCP_importance(My_Template_FeatureImportance):
         X_test,y_test = test_data
         X_test = pd.get_dummies(X_test,drop_first=True,dtype=int)
         y_test =  pd.Categorical(y_test,categories=self.classes_)
-        return super()._permutation_importance((X_test.to_numpy(),pd.get_dummies(y_test,dtype=int,drop_first=False).to_numpy()),
+        out = super()._permutation_importance((X_test.to_numpy(),pd.get_dummies(y_test,dtype=int,drop_first=False).to_numpy()),
                                                n_repeats=n_repeats,
                                                scoring=None)
+        _Data_driven_Thresholding(self)
+        return out
 
 
     def update_importance(self,imp_kind='coef',**kwargs_pimp):
@@ -397,6 +406,7 @@ class MCP_importance(My_Template_FeatureImportance):
         else :
             self.feature_importances_ = self._coef_to_importance(self.coef_,
                                                                  self.reduce_norm,identifiability=True)
+            _Data_driven_Thresholding(self)
 
 
     def transform(self,X):
@@ -443,7 +453,7 @@ class MCP_importance(My_Template_FeatureImportance):
         if (true_imp.dtype==bool) :
             self.true_support = true_imp
         else :
-            self.true_support = (true_imp >= self.threshold_)
+            self.true_support = (true_imp > self.threshold_)
         return super().get_error_rates(plot=plot)
 
 
