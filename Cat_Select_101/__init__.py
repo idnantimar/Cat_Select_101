@@ -403,10 +403,10 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         if plot :
             ConfusionMatrixDisplay(self.confusion_matrix_for_features_,
                                    display_labels=['null','non-null']).plot(colorbar=False)
-        return {'PCER':self.pcer_,
-                'FDR':self.fdr_,
-                'PFER':self.pfer_,
-                'TPR':self.tpr_,
+        return {'PCER':pcer_,
+                'FDR':fdr_,
+                'PFER':pfer_,
+                'TPR':tpr_,
                 'n_FalseNegatives':n_false_negatives_,
                 'minModel_size':minumum_model_size_,
                 'selection_F1':f1_score_for_features_,
