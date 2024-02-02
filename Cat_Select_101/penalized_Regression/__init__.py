@@ -88,7 +88,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
-        cumulative_score_cutoff : float in [0,1) ; default 0.01
+        cumulative_score_cutoff : float in [0,1) ; default 0.05
             Computes data-driven 'threshold' for selecting those features that contributes to top
             100*(1-cut_off)% feature importances. Result is not valid when all features
             are unimportant.
@@ -102,7 +102,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
 
     def __init__(self,random_state=None,*,penalty_params=[0],dtype=tf.float64,
                  reduce_norm=1,
-                 max_features=None,threshold=0,cumulative_score_cutoff=0.01,
+                 max_features=None,threshold=0,cumulative_score_cutoff=0.05,
                  compile_configuration={'optimizer':'adam','metrics':['accuracy']},
                  cv_configuration={'cv':None,'verbose':2}):
         super().__init__(random_state)
@@ -302,11 +302,17 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         """
         Computes various error-rates when true importance of the features are known.
 
+        *   If a feature is True in `support_` and False in `true_support`
+            it is a false-discovery or false +ve
+
+        *   If a feature is False in `support_` and True in `true_support`
+            it is a false -ve
+
         Parameters
         ----------
         true_imp : array of shape (`n_features_in_`,)
             If a boolean array , True implies the feature is important in true model, null feature otherwise.
-            If a array of floats , it represent the `feature_importances_` of the true model.
+            If an array of floats , it represent the `feature_importances_` of the true model.
 
         plot : bool ; default False
             Whether to plot the `confusion_matrix_for_features_`.
@@ -316,13 +322,21 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
         dict
             Returns the empirical estimate of various error-rates
            {
-               'PCER': per-comparison error rate,
+               'PCER': per-comparison error rate ; ``mean`` (`false_discoveries_`),
 
-                'FDR': false discovery rate,
+               'FDR': false discovery rate ; 1 - ``precision`` (`true_support`, `support_`),
 
-                'PFER': per-family error rate,
+               'PFER': per-family error rate ; ``sum`` (`false_discoveries_`),
 
-                'TPR': true positive rate
+               'TPR': true positive rate ; ``recall`` (`true_support`, `support_`),
+
+               'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
+
+               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+
+               'selection_F1': ``F1_score`` (`true_support`, `support_`),
+
+               'selection_YoudenJ': ``sensitivity`` (`true_support`, `support_`) + ``specificity`` (`true_support`, `support_`) - 1
             }
 
         """
@@ -332,7 +346,7 @@ class penalizedLOGISTIC_importance_tf(My_Template_FeatureImportance):
             self.true_support = true_imp
         else :
             self.true_support = (true_imp > self.threshold_)
-        return super().get_error_rates(plot=plot)
+        return super()._get_error_rates(plot=plot)
 
 
 
