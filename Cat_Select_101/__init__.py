@@ -355,7 +355,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
 
 
-    def get_error_rates(self,*,plot=False):
+    def _get_error_rates(self,*,plot=False):
         """
         This function computes `pfer_`, `pcer_`, `fdr_`, `false_discoveries_`,
         `minimum_model_size_`, `tpr_`, `n_false_negatives_`, `confusion_matrix_for_features_`,
