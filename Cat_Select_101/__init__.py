@@ -357,9 +357,9 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
 
     def get_error_rates(self,*,plot=False):
         """
-        This function computes attributes `pfer_`, `pcer_`, `fdr_`, `false_discoveries_`,
+        This function computes `pfer_`, `pcer_`, `fdr_`, `false_discoveries_`,
         `minimum_model_size_`, `tpr_`, `n_false_negatives_`, `confusion_matrix_for_features_`,
-        `f1_score_for_features_` assuming there is an attribute `true_support`.
+        `f1_score_for_features_`, `youden_index_for_features_` assuming there is an attribute `true_support`.
 
         Can plot the `confusion_matrix_for_features_`.
 
@@ -369,34 +369,36 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         Returns
         -------
         dict
-            Conatins various error rates PCER,FDR,PFER,TPR.
+            Conatins various error rates PCER,FDR,PFER,TPR etc.
 
         """
-        compare_truth = (np.array(self.true_support,dtype=int)-self.support_)
-        self.false_discoveries_ = (compare_truth == -1)
+        _compare_truth = (np.array(self.true_support,dtype=int)-self.support_)
+        self.false_discoveries_ = (_compare_truth == -1)
                 ## if a feature is True in 'support_' and False in 'true_support'
                  ## it is a false-discovery or false +ve
-        self.minumum_model_size_ = (self.ranking_[self.true_support]).max()
+        minumum_model_size_ = (self.ranking_[self.true_support]).max()
                 ## from the ordering of 'feature_importances_' the minimum number of features to be selected
                  ## to include the least true important features and those false discoveries having more importance
                   ## same as computing the maximum 'ranking_' among true important features
-        self.pfer_ = self.false_discoveries_.sum()
-        self.pcer_ = self.pfer_/self.n_features_in_
-        self.fdr_ = 1 - precision_score(y_true=self.true_support,y_pred=self.support_,
+        pfer_ = self.false_discoveries_.sum()
+        pcer_ = pfer_/self.n_features_in_
+        fdr_ = 1 - precision_score(y_true=self.true_support,y_pred=self.support_,
                                          zero_division=1.0)
                 ## lower 'fdr_' is favourable
-        self.false_negatives_ = (compare_truth == 1)
+        self.false_negatives_ = (_compare_truth == 1)
                 ## if a feature is False in 'support_' and True in 'true_support'
                  ## it is a false -ve
-        self.n_false_negatives_ = self.false_negatives_.sum()
-        self.tpr_ = recall_score(y_true=self.true_support,y_pred=self.support_,
+        n_false_negatives_ = self.false_negatives_.sum()
+        tpr_ = recall_score(y_true=self.true_support,y_pred=self.support_,
                                  zero_division=np.nan)
                 ## higher 'tpr_' is favourable
         self.confusion_matrix_for_features_ = confusion_matrix(y_true=self.true_support,
                                                                y_pred=self.support_)
-        self.f1_score_for_features_ = f1_score(y_true=self.true_support,y_pred=self.support_,
+        f1_score_for_features_ = f1_score(y_true=self.true_support,y_pred=self.support_,
                                                zero_division=np.nan)
-                ## this confusion matrix or f1 score corresponds to the labelling of
+        _n_negatives = (self.n_features_in_-np.sum(self.true_support))
+        youden_index_for_features_ = (tpr_ - (pfer_/_n_negatives)) if _n_negatives else None
+                ## this confusion matrix or f1 score or youden index corresponds to the labelling of
                  ## null/non-null features, not corresponds to the labelling of target(y) classes
         if plot :
             ConfusionMatrixDisplay(self.confusion_matrix_for_features_,
@@ -404,7 +406,11 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         return {'PCER':self.pcer_,
                 'FDR':self.fdr_,
                 'PFER':self.pfer_,
-                'TPR':self.tpr_}
+                'TPR':self.tpr_,
+                'n_FalseNegatives':n_false_negatives_,
+                'minModel_size':minumum_model_size_,
+                'selection_F1':f1_score_for_features_,
+                'selection_YoudenJ':youden_index_for_features_}
 
 
 
