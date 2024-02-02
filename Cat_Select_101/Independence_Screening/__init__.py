@@ -39,7 +39,7 @@ class SIS_importance(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
-        cumulative_score_cutoff : float in [0,1) ; default 0.01
+        cumulative_score_cutoff : float in [0,1) ; default 0.05
             Computes data-driven 'threshold' for selecting those features that contributes to top
             100*(1-cut_off)% feature importances. Result is not valid when all features
             are unimportant.
@@ -58,9 +58,6 @@ class SIS_importance(My_Template_FeatureImportance):
         false_negatives_ : array of shape (`n_features_in_`,)
             Boolean mask of false negatives.
 
-        fdr_ : float
-            1 - ``precision_score`` (`true_support`, `support_`)
-
         feature_importances_ : array of shape (`n_features_in_`,)
             Importances of features.
 
@@ -70,17 +67,8 @@ class SIS_importance(My_Template_FeatureImportance):
         features_selected_ : array of shape (`n_features_selected_`,)
             Names of selected features.
 
-        f1_score_for_features_ : float
-            ``f1_score`` (`true_support`, `support_`)
-
-        minimum_model_size_ : int
-            ``np.max`` (`ranking_` [ `true_support` ])
-
         n_classes_ : int
             Number of target classes.
-
-        n_false_negatives_ : int
-            Number of false negatives.
 
         n_features_in_ : int
             Number of features seen during ``fit``.
@@ -91,12 +79,6 @@ class SIS_importance(My_Template_FeatureImportance):
         n_samples_ : int
             Number of observations seen during ``fit``.
 
-        pcer_ : float
-            ``np.mean`` (`false_discoveries_`)
-
-        pfer_ : int
-            ``np.sum`` (`false_discoveries_`)
-
         ranking_ : array of shape (`n_features_in_`,)
             The feature ranking, such that ``ranking_[i]`` corresponds to the
             i-th best feature, i=1,2,..., `n_features_in_`.
@@ -106,9 +88,6 @@ class SIS_importance(My_Template_FeatureImportance):
 
         threshold_ : float
             Cut-off in use, for selection/rejection.
-
-        tpr_ : float
-            ``recall_score`` (`true_support`, `support_`)
 
         true_support : array of shape (`n_features_in_`,)
             Boolean mask of active features in population, only available after
@@ -124,7 +103,7 @@ class SIS_importance(My_Template_FeatureImportance):
 
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,*,max_features=None,threshold=0,cumulative_score_cutoff=0.01):
+    def __init__(self,*,max_features=None,threshold=0,cumulative_score_cutoff=0.05):
         super().__init__()
         self.threshold = threshold
         self.max_features = max_features
@@ -200,13 +179,21 @@ class SIS_importance(My_Template_FeatureImportance):
         dict
             Returns the empirical estimate of various error-rates
            {
-               'PCER': per-comparison error rate,
+               'PCER': per-comparison error rate ; ``mean`` (`false_discoveries_`),
 
-               'FDR': false discovery rate,
+               'FDR': false discovery rate ; 1 - ``precision`` (`true_support`, `support_`),
 
-               'PFER': per-family error rate,
+               'PFER': per-family error rate ; ``sum`` (`false_discoveries_`),
 
-               'TPR': true positive rate
+               'TPR': true positive rate ; ``recall`` (`true_support`, `support_`),
+
+               'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
+
+               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+
+               'selection_F1': ``F1_score`` (`true_support`, `support_`),
+
+               'selection_YoudenJ': ``sensitivity`` (`true_support`, `support_`) + ``specificity`` (`true_support`, `support_`) - 1
             }
 
         """
@@ -216,7 +203,8 @@ class SIS_importance(My_Template_FeatureImportance):
             self.true_support = true_imp
         else :
             self.true_support = (true_imp > self.threshold_)
-        return super().get_error_rates(plot=plot)
+        return super()._get_error_rates(plot=plot)
+
 
 
 
@@ -251,7 +239,7 @@ class SIScat_importance(My_Template_FeatureImportance):
             A cut-off, any feature with importance exceeding this value will be selected,
             otherwise will be rejected.
 
-        cumulative_score_cutoff : float in [0,1) ; default 0.01
+        cumulative_score_cutoff : float in [0,1) ; default 0.05
             Computes data-driven 'threshold' for selecting those features that contributes to top
             100*(1-cut_off)% feature importances. Result is not valid when all features
             are unimportant.
@@ -270,9 +258,6 @@ class SIScat_importance(My_Template_FeatureImportance):
         false_negatives_ : array of shape (`n_features_in_`,)
             Boolean mask of false negatives.
 
-        fdr_ : float
-            1 - ``precision_score`` (`true_support`, `support_`)
-
         feature_importances_ : array of shape (`n_features_in_`,)
             Importances of features.
 
@@ -282,17 +267,8 @@ class SIScat_importance(My_Template_FeatureImportance):
         features_selected_ : array of shape (`n_features_selected_`,)
             Names of selected features.
 
-        f1_score_for_features_ : float
-            ``f1_score`` (`true_support`, `support_`)
-
-        minimum_model_size_ : int
-            ``np.max`` (`ranking_` [ `true_support` ])
-
         n_classes_ : int
             Number of target classes.
-
-        n_false_negatives_ : int
-            Number of false negatives.
 
         n_features_in_ : int
             Number of features seen during ``fit``.
@@ -303,12 +279,6 @@ class SIScat_importance(My_Template_FeatureImportance):
         n_samples_ : int
             Number of observations seen during ``fit``.
 
-        pcer_ : float
-            ``np.mean`` (`false_discoveries_`)
-
-        pfer_ : int
-            ``np.sum`` (`false_discoveries_`)
-
         ranking_ : array of shape (`n_features_in_`,)
             The feature ranking, such that ``ranking_[i]`` corresponds to the
             i-th best feature, i=1,2,..., `n_features_in_`.
@@ -318,9 +288,6 @@ class SIScat_importance(My_Template_FeatureImportance):
 
         threshold_ : float
             Cut-off in use, for selection/rejection.
-
-        tpr_ : float
-            ``recall_score`` (`true_support`, `support_`)
 
         true_support : array of shape (`n_features_in_`,)
             Boolean mask of active features in population, only available after
@@ -338,7 +305,7 @@ class SIScat_importance(My_Template_FeatureImportance):
 
     _coef_to_importance = None
     _permutation_importance = None
-    def __init__(self,*,max_features=None,threshold=1e-10,cumulative_score_cutoff=0.01):
+    def __init__(self,*,max_features=None,threshold=1e-10,cumulative_score_cutoff=0.05):
         super().__init__()
         self.threshold = threshold
         self.max_features = max_features
@@ -416,13 +383,21 @@ class SIScat_importance(My_Template_FeatureImportance):
         dict
             Returns the empirical estimate of various error-rates
            {
-               'PCER': per-comparison error rate,
+               'PCER': per-comparison error rate ; ``mean`` (`false_discoveries_`),
 
-               'FDR': false discovery rate,
+               'FDR': false discovery rate ; 1 - ``precision`` (`true_support`, `support_`),
 
-               'PFER': per-family error rate,
+               'PFER': per-family error rate ; ``sum`` (`false_discoveries_`),
 
-               'TPR': true positive rate
+               'TPR': true positive rate ; ``recall`` (`true_support`, `support_`),
+
+               'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
+
+               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+
+               'selection_F1': ``F1_score`` (`true_support`, `support_`),
+
+               'selection_YoudenJ': ``sensitivity`` (`true_support`, `support_`) + ``specificity`` (`true_support`, `support_`) - 1
             }
 
         """
@@ -432,7 +407,7 @@ class SIScat_importance(My_Template_FeatureImportance):
             self.true_support = true_imp
         else :
             self.true_support = (true_imp > self.threshold_)
-        return super().get_error_rates(plot=plot)
+        return super()._get_error_rates(plot=plot)
 
 
 
