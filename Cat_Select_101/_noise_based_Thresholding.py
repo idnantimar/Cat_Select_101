@@ -18,6 +18,7 @@ from scipy.stats import rankdata
 from sklearn.base import BaseEstimator,TransformerMixin
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 
 
@@ -405,6 +406,9 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         n_resamples : int ; default 50
             Number of times the data to be permuted to generate null distribution.
 
+        prefit : bool ; default False
+            Whether the ``base_estimator`` is already fitted or not.
+
         kwargs_Parallel : dict of keyword arguments to ``joblib.Parallel`` ;
         default ``{'n_jobs':None}``
 
@@ -459,10 +463,11 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
     """
     def __init__(self,base_estimator,
-                 n_resamples=50,*,
+                 n_resamples=50,*,prefit=False,
                  kwargs_Parallel={'n_jobs':None},random_state=None):
         self.base_estimator = base_estimator
         self.n_resamples = n_resamples
+        self.prefit = prefit
         self.kwargs_Parallel = kwargs_Parallel
         self.random_state = random_state
 
@@ -547,7 +552,7 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         ## null importances ....
         imp0_ = self._simulate_null_importances(X,y,**fit_params)
         ## observed importances ....
-        self.base_estimator.fit(X,y,**fit_params)
+        if not self.prefit : self.base_estimator.fit(X,y,**fit_params)
         for attribute in ['feature_importances_','feature_names_in_','ranking_',
                           'n_samples_','n_features_in_',
                           'classes_','n_classes_']:
