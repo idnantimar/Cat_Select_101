@@ -123,8 +123,6 @@ class BCT_selection(TransformerMixin,BaseEstimator):
         X : DataFrame of shape (n_samples, n_features)
             The training input samples.
 
-            NOTE : Each feature must be on same scale.
-
         y : Series of shape (n_samples,)
             The target values.
 
@@ -378,6 +376,8 @@ class BCT_selection(TransformerMixin,BaseEstimator):
 #### PIMP =====================================================================
 
 from joblib import Parallel, delayed
+from sklearn.base import clone
+
 
 
 
@@ -488,10 +488,12 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
         """
         n = X.shape[0]
+        estimator = clone(self.base_estimator)
+        setattr(estimator,'verbose',0)
         def _for_each_reshuffle(t):
             shuffled_ix = rng.permutation(n)
-            self.base_estimator.fit(X,y.iloc[shuffled_ix],**fit_params)
-            return self.base_estimator.feature_importances_
+            estimator.fit(X,y.iloc[shuffled_ix],**fit_params)
+            return estimator.feature_importances_
         rng = np.random.default_rng(self.random_state)
         return np.array(Parallel(**self.kwargs_Parallel)(delayed(_for_each_reshuffle)(t)
                                                 for t in range(self.n_resamples)))
