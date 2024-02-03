@@ -250,7 +250,8 @@ class BCT_selection(TransformerMixin,BaseEstimator):
         return self.base_estimator.inverse_transform(X)
 
 
-    def plot(self,sort=True,savefig=None,**kwargs):
+    def plot(self,sort=True,savefig=None,*,kind='bar',ax=None,
+             xlabel='features',ylabel=None,title=None,rot=30,color=['green','red'],**kwargs):
         """
         Make plot of `feature_importances_`.
 
@@ -267,13 +268,41 @@ class BCT_selection(TransformerMixin,BaseEstimator):
 
         savefig : "directory/for/saving/your_plot"
             default None, implies plot will not be saved. True will save the plot inside a folder PLOTs at the current working directory.
-            The plot will be saved as self.__class__.__name__-datetime.now().strftime('%Y_%m_%d_%H%M%S%f').png
+            The plot will be saved as self.-datetime.now().strftime('%Y_%m_%d_%H%M%S%f').png
 
-        **kwargs : keyword arguments to pass to matplotlib plotting method.
+        kind, ax, xlabel, ylabel, title, rot, color, **kwargs : keyword arguments to pass to matplotlib plotting method.
 
         """
-        kwargs.update({'ylabel':'BCT_'+ascii(self.base_estimator)})
-        self.base_estimator.plot(sort=sort,savefig=savefig,**kwargs)
+        support_ = self.get_support()
+        if self.feature_names_in_ is None :
+            ix = (np.vectorize(lambda j:"X_"+str(j)))(range(self.n_features_in_))
+        else : ix = self.feature_names_in_
+        if ylabel is None :
+            ylabel = 'BCT_'+ascii(self.base_estimator)
+        if title is None :
+            title = "selected : " + str(self.n_features_selected_) +"/" + str(self.n_features_in_)
+        imp = pd.Series(self.feature_importances_,index=ix)
+        colors = np.array([(color[0] if val else color[1]) for val in support_])
+        truth_known = hasattr(self.base_estimator,'true_support')
+        if truth_known :
+            hatch_patterns = np.array([('/' if val else None) for val in (self.base_estimator.true_support!=support_)])
+        else : hatch_patterns = np.array([None]*self.n_features_in_)
+        if sort :
+            sort_ix = np.argsort(-self.feature_importances_)
+            imp = imp.iloc[sort_ix]
+            colors = colors[sort_ix]
+            hatch_patterns = hatch_patterns[sort_ix]
+        imp.plot(kind=kind,ax=ax,xlabel=xlabel,ylabel=ylabel,title=title,rot=rot,
+                 color=colors,hatch=hatch_patterns,**kwargs)
+                ## in default plots, red: rejected, green: selected , stripe: false +-
+        plt.axhline(self.BCT,color='black',linestyle='dashed')
+        if savefig is not None :
+            if savefig==True :
+                os.makedirs('PLOTs',exist_ok=True)
+                savefig = 'PLOTs'
+            plt.savefig(os.path.join(savefig,
+                                     ascii(self)+f"-{datetime.now().strftime('%Y_%m_%d_%H%M%S%f')}.png"))
+        plt.show()
 
 
     def get_error_rates(self,true_imp,*,plot=False):
@@ -356,11 +385,16 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
     """
         Permutation Importance based feature selection.
 
-        Key Idea :
+        Key Idea : Decouple (X,y) multiple times by randomly permuting y, keeping X fixed.
+        Each time evaluate `feature_importances_` with some ``base_estimator``, this will simulate
+        null distribution of `feature_importances_`. Then select features that exceed some
+        upper quantile of null distribution.
 
-        Pros :
+        Pros : If the ``base_estimator`` is biased towards any feature (e.g. GBM is biased towards
+        categorical features with high cardinality compared to categorical features with low cardinality),
+        this method can address that bias during feature selection.
 
-        Cons :
+        Cons : Simulating the null importances is very computation intensive.
 
         Parameters
         ----------
@@ -609,7 +643,8 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         return self.base_estimator.inverse_transform(X)
 
 
-    def plot(self,sort=True,savefig=None,**kwargs):
+    def plot(self,sort=True,savefig=None,*,kind='bar',ax=None,
+             xlabel='features',ylabel=None,title=None,rot=30,color=['green','red'],**kwargs):
         """
         Make plot of `feature_importances_`.
 
@@ -626,11 +661,43 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
         savefig : "directory/for/saving/your_plot"
             default None, implies plot will not be saved. True will save the plot inside a folder PLOTs at the current working directory.
-            The plot will be saved as self.__class__.__name__-datetime.now().strftime('%Y_%m_%d_%H%M%S%f').png
+            The plot will be saved as self.-datetime.now().strftime('%Y_%m_%d_%H%M%S%f').png
 
-        **kwargs : keyword arguments to pass to matplotlib plotting method.
+        kind, ax, xlabel, ylabel, title, rot, color, **kwargs : keyword arguments to pass to matplotlib plotting method.
 
         """
+        support_ = self.get_support()
+        if self.feature_names_in_ is None :
+            ix = (np.vectorize(lambda j:"X_"+str(j)))(range(self.n_features_in_))
+        else : ix = self.feature_names_in_
+        if ylabel is None :
+            ylabel = 'PIMP_'+ascii(self.base_estimator)
+        if title is None :
+            title = "selected : " + str(self.n_features_selected_) +"/" + str(self.n_features_in_)
+        imp = pd.Series(self.feature_importances_,index=ix)
+        cutoff = self.threshold_
+        colors = np.array([(color[0] if val else color[1]) for val in support_])
+        truth_known = hasattr(self.base_estimator,'true_support')
+        if truth_known :
+            hatch_patterns = np.array([('/' if val else None) for val in (self.base_estimator.true_support!=support_)])
+        else : hatch_patterns = np.array([None]*self.n_features_in_)
+        if sort :
+            sort_ix = np.argsort(-self.feature_importances_)
+            imp = imp.iloc[sort_ix]
+            cutoff = cutoff[sort_ix]
+            colors = colors[sort_ix]
+            hatch_patterns = hatch_patterns[sort_ix]
+        imp.plot(kind=kind,ax=ax,xlabel=xlabel,ylabel=ylabel,title=title,rot=rot,
+                 color=colors,hatch=hatch_patterns,**kwargs)
+                ## in default plots, red: rejected, green: selected , stripe: false +-
+        plt.plot(cutoff,color='black',linestyle='dashed')
+        if savefig is not None :
+            if savefig==True :
+                os.makedirs('PLOTs',exist_ok=True)
+                savefig = 'PLOTs'
+            plt.savefig(os.path.join(savefig,
+                                     ascii(self)+f"-{datetime.now().strftime('%Y_%m_%d_%H%M%S%f')}.png"))
+        plt.show()
 
 
     def get_error_rates(self,true_imp,*,plot=False):
