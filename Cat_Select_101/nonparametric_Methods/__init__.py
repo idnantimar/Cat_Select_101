@@ -177,7 +177,7 @@ class cb_importance(My_Template_FeatureImportance):
         fit_params.update({'cat_features':self.cat_features_})
         estimator.fit(X,y,**fit_params)
         self.estimator = estimator
-        self.feature_importances_ = self.estimator.feature_importances_
+        self.feature_importances_ = self.estimator.get_feature_importance(type='PredictionValuesChange')
         _Data_driven_Thresholding(self)
         return self
 
@@ -237,7 +237,6 @@ class cb_importance(My_Template_FeatureImportance):
 
 
 #### ==========================================================================
-
 
 
 
