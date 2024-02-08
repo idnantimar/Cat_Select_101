@@ -204,8 +204,8 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         are unimportant.
 
         """
-        importances_ = np.sort(self.feature_importances_)
-        n_select = (importances_.cumsum()/importances_.sum() >= cut_off).sum()
+        cum_importances_ = np.sort(self.feature_importances_).cumsum()
+        n_select = (cum_importances_ >= cut_off*cum_importances_[-1]).sum()
         if n_select < self.n_features_in_ :
             self.threshold_ = max(self.feature_importances_[np.where(self.ranking_==(n_select+1))],
                                   self.threshold_)
