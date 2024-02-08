@@ -12,6 +12,7 @@ Topic: The ``CatBoost``,being widely used in machine learning,
 
 #### Gradient Boosting Machines importance ====================================
 
+import numpy as np
 from catboost import CatBoostClassifier
 from sklearn.base import clone
 from .. import My_Template_FeatureImportance,_Data_driven_Thresholding
