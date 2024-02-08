@@ -472,7 +472,7 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         self.random_state = random_state
 
 
-    def _simulate_null_importances(self,X,y,rng,**fit_params):
+    def _simulate_null_importances(self,X,y,**fit_params):
         """
         Simulate null importances by resampling.
 
