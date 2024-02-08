@@ -378,7 +378,7 @@ class BCT_selection(TransformerMixin,BaseEstimator):
 
 from joblib import Parallel, delayed
 from sklearn.base import clone
-
+from ._utils._rng import _seed_sum
 
 
 
@@ -472,7 +472,7 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         self.random_state = random_state
 
 
-    def _simulate_null_importances(self,X,y,**fit_params):
+    def _simulate_null_importances(self,X,y,rng,**fit_params):
         """
         Simulate null importances by resampling.
 
@@ -496,10 +496,10 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         estimator = clone(self.base_estimator)
         setattr(estimator,'verbose',0)
         def _for_each_reshuffle(t):
+            rng = np.random.default_rng(_seed_sum(self.random_state,t))
             shuffled_ix = rng.permutation(n)
             estimator.fit(X,y.iloc[shuffled_ix],**fit_params)
             return estimator.feature_importances_
-        rng = np.random.default_rng(self.random_state)
         return np.array(Parallel(**self.kwargs_Parallel)(delayed(_for_each_reshuffle)(t)
                                                 for t in range(self.n_resamples)))
 
