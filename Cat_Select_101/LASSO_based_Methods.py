@@ -133,7 +133,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
     """
     Estimator_Type = {'penalty':'l1','solver':'saga'}
 
-    def __init__(self,random_state=None,*,multi_class='multinomial',Cs=list(np.logspace(-4,4,10)),
+    def __init__(self,random_state=None,*,multi_class='multinomial',Cs=list(np.logspace(-2,2,5)),
                  max_iter=1000,reduce_norm=1,
                  max_features=None,threshold=0,cumulative_score_cutoff=0.05,
                  set_params_LogisticReg={}):
