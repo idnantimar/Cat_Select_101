@@ -381,9 +381,9 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
                  ## to include the least true important features and those false discoveries having more importance
                   ## same as computing the maximum 'ranking_' among true important features
         pfer_ = self.false_discoveries_.sum()
-        pcer_ = pfer_/self.n_features_in_
-        fdr_ = 1 - precision_score(y_true=self.true_support,y_pred=self.support_,
-                                         zero_division=1.0)
+        pcer_ = 100*pfer_/self.n_features_in_
+        fdr_ = 100*(1 - precision_score(y_true=self.true_support,y_pred=self.support_,
+                                         zero_division=1.0))
                 ## lower 'fdr_' is favourable
         self.false_negatives_ = (_compare_truth == 1)
                 ## if a feature is False in 'support_' and True in 'true_support'
@@ -400,6 +400,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         youden_index_for_features_ = (tpr_ - (pfer_/_n_negatives)) if _n_negatives else None
                 ## this confusion matrix or f1 score or youden index corresponds to the labelling of
                  ## null/non-null features, not corresponds to the labelling of target(y) classes
+        tpr_ *= 100
         if plot :
             ConfusionMatrixDisplay(self.confusion_matrix_for_features_,
                                    display_labels=['null','non-null']).plot(colorbar=False)
