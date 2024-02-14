@@ -376,7 +376,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
         self.false_discoveries_ = (_compare_truth == -1)
                 ## if a feature is True in 'support_' and False in 'true_support'
                  ## it is a false-discovery or false +ve
-        minumum_model_size_ = (self.ranking_[self.true_support]).max()
+        minimum_model_size_ = (self.ranking_[self.true_support]).max()
                 ## from the ordering of 'feature_importances_' the minimum number of features to be selected
                  ## to include the least true important features and those false discoveries having more importance
                   ## same as computing the maximum 'ranking_' among true important features
@@ -412,7 +412,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
                 'PFER':pfer_,
                 'TPR':tpr_,
                 'n_FalseNegatives':n_false_negatives_,
-                'minModel_size_ratio':minumum_model_size_,
+                'minModel_size_ratio':minimum_model_size_,
                 'selection_F1':f1_score_for_features_,
                 'selection_YoudenJ':youden_index_for_features_}
 
