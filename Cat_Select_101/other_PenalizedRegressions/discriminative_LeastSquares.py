@@ -13,6 +13,7 @@ Topic: Feature Importance Based on Discriminative Least Squares Regression.
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score
 from .. import My_Template_FeatureImportance,_Data_driven_Thresholding
 from .._utils._d_lsr import d_LSR
 
@@ -322,7 +323,7 @@ class dLS_impotance(My_Template_FeatureImportance):
 
                'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
 
-               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+               'minModel_size_ratio': maximum rank of important features compared to actual size ; ``max`` (`ranking_` [ `true_support` ]) / ``sum`` (`true_support`),
 
                'selection_F1': ``F1_score`` (`true_support`, `support_`),
 
@@ -358,9 +359,9 @@ class dLS_impotance(My_Template_FeatureImportance):
         """
         X,y = (pd.get_dummies(X,dtype=float,drop_first=True).to_numpy(),
                pd.get_dummies(y,dtype=float,drop_first=False).to_numpy())
-        return self.estimator.score(X,y)
-
-
+        pred_ = self.estimator.predict(X)
+        pred_ = [self.classes_[i] for i in pred_]
+        return accuracy_score(y_true=y,y_pred=pred_)
 
 
 
