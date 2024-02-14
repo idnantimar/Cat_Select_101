@@ -380,6 +380,9 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
                 ## from the ordering of 'feature_importances_' the minimum number of features to be selected
                  ## to include the least true important features and those false discoveries having more importance
                   ## same as computing the maximum 'ranking_' among true important features
+        minimum_model_size_ /= np.sum(self.true_support)
+                ## instead of reporting the raw number , the ratio to actual size is reported
+                ## this ratio always >=1 , 1 is the ideal case
         pfer_ = self.false_discoveries_.sum()
         pcer_ = 100*pfer_/self.n_features_in_
         fdr_ = 100*(1 - precision_score(y_true=self.true_support,y_pred=self.support_,
@@ -409,7 +412,7 @@ class My_Template_FeatureImportance(SelectorMixin,BaseEstimator):
                 'PFER':pfer_,
                 'TPR':tpr_,
                 'n_FalseNegatives':n_false_negatives_,
-                'minModel_size':minumum_model_size_,
+                'minModel_size_ratio':minumum_model_size_,
                 'selection_F1':f1_score_for_features_,
                 'selection_YoudenJ':youden_index_for_features_}
 
