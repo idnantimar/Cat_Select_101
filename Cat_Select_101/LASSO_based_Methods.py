@@ -305,6 +305,29 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         super().dump_to_file(file_path)
 
 
+    def score(self,X,y):
+        """
+        ``score`` method for the underlying fitted ``estimator``.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The test input samples.
+
+        y : Series of shape (n_samples,)
+            The target values.
+        Returns
+        -------
+        float
+            The ``accuracy`` metric.
+
+        """
+        X = pd.get_dummies(pd.DataFrame(X),drop_first=True,dtype=int)
+        return self.estimator.score(X,y)
+
+
+
+
 
 
 
@@ -587,6 +610,28 @@ class L1SVM_importance(My_Template_FeatureImportance):
         else :
             self.true_support = (true_imp > self.threshold_)
         return super()._get_error_rates(plot=plot)
+
+
+    def score(self,X,y):
+        """
+        ``score`` method for the underlying fitted ``estimator``.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The test input samples.
+
+        y : Series of shape (n_samples,)
+            The target values.
+        Returns
+        -------
+        float
+            The ``accuracy`` metric.
+
+        """
+        X = pd.get_dummies(pd.DataFrame(X),drop_first=True,dtype=int)
+        return self.estimator.score(X,y)
+
 
 
 
