@@ -204,7 +204,7 @@ class dLS_impotance(My_Template_FeatureImportance):
         ### fitting the Model .....
         fit_params = {'W0':W0,'t0':t0,'max_iter':self.max_iter,'tol':self.tol}
         if len(self.regularization)>1 :
-            cv_config.update({'refit':True})
+            self.cv_config.update({'refit':True})
             self.gridsearch = GridSearchCV(estimator,
                                            param_grid={'regularization':self.regularization},
                                            **self.cv_config)
@@ -337,6 +337,29 @@ class dLS_impotance(My_Template_FeatureImportance):
         else :
             self.true_support = (true_imp > self.threshold_)
         return super()._get_error_rates(plot=plot)
+
+
+    def score(self,X,y):
+        """
+        ``score`` method for the underlying fitted ``estimator``.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The test input samples.
+
+        y : Series of shape (n_samples,)
+            The target values.
+        Returns
+        -------
+        float
+            The ``accuracy`` metric.
+
+        """
+        X,y = (pd.get_dummies(X,dtype=float,drop_first=True).to_numpy(),
+               pd.get_dummies(y,dtype=float,drop_first=False).to_numpy())
+        return self.estimator.score(X,y)
+
 
 
 
