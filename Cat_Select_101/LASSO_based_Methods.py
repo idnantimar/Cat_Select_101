@@ -276,7 +276,7 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
 
                'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
 
-               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+               'minModel_size_ratio': maximum rank of important features compared to actual size ; ``max`` (`ranking_` [ `true_support` ]) / ``sum`` (`true_support`),
 
                'selection_F1': ``F1_score`` (`true_support`, `support_`),
 
@@ -324,8 +324,6 @@ class vanillaLASSO_importance(My_Template_FeatureImportance):
         """
         X = pd.get_dummies(pd.DataFrame(X),drop_first=True,dtype=int)
         return self.estimator.score(X,y)
-
-
 
 
 
@@ -595,7 +593,7 @@ class L1SVM_importance(My_Template_FeatureImportance):
 
                'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
 
-               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+               'minModel_size_ratio': maximum rank of important features compared to actual size ; ``max`` (`ranking_` [ `true_support` ]) / ``sum`` (`true_support`),
 
                'selection_F1': ``F1_score`` (`true_support`, `support_`),
 
@@ -631,7 +629,6 @@ class L1SVM_importance(My_Template_FeatureImportance):
         """
         X = pd.get_dummies(pd.DataFrame(X),drop_first=True,dtype=int)
         return self.estimator.score(X,y)
-
 
 
 
