@@ -332,7 +332,7 @@ class BCT_selection(TransformerMixin,BaseEstimator):
 
                'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
 
-               'minModel_size': maximum rank of important features ; ``max`` (`ranking_` [ `true_support` ]),
+               'minModel_size_ratio': maximum rank of important features compared to actual size ; ``max`` (`ranking_` [ `true_support` ]) / ``sum`` (`true_support`),
 
                'selection_F1': ``F1_score`` (`true_support`, `support_`),
 
@@ -403,11 +403,15 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         `feature_importances_` after fitting
             The base estimator used for feature selection.
 
-        n_resamples : int ; default 50
+        n_resamples : int ; default 100
             Number of times the data to be permuted to generate null distribution.
 
         prefit : bool ; default False
             Whether the ``base_estimator`` is already fitted or not.
+
+        cutoff : float in (0,1) ; default None
+            The quantile of null distribution to be used for selection/rejection.
+            If not specified Q3+1.5IQR will be used.
 
         kwargs_Parallel : dict of keyword arguments to ``joblib.Parallel`` ;
         default ``{'n_jobs':None}``
@@ -447,6 +451,9 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         n_samples_ : int
             Number of observations seen during ``fit``.
 
+        p_value : array of shape (`n_features_in_`,)
+            Proportion of null importances atleast as extreme as observed importances for each features.
+
         ranking_ : array of shape (`n_features_in_`,)
             The feature ranking, such that ``ranking_[i]`` corresponds to the
             i-th best feature, i=1,2,..., `n_features_in_`.
@@ -463,16 +470,17 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
     """
     def __init__(self,base_estimator,
-                 n_resamples=50,*,prefit=False,
+                 n_resamples=100,*,prefit=False,cutoff=None,
                  kwargs_Parallel={'n_jobs':None},random_state=None):
         self.base_estimator = base_estimator
         self.n_resamples = n_resamples
         self.prefit = prefit
+        self.cutoff = cutoff
         self.kwargs_Parallel = kwargs_Parallel
         self.random_state = random_state
 
 
-    def _simulate_null_importances(self,X,y,**fit_params):
+    def _null_importances_AND_threshold(self,X,y,**fit_params):
         """
         Simulate null importances by resampling.
 
@@ -488,8 +496,8 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
         Returns
         -------
-        array of shape (n_reshamples,`n_features_in_`)
-            The array of simulated null importances.
+        array of shape (`n_features_in_`,)
+            Threshold corresponding to each features.
 
         """
         n = X.shape[0]
@@ -500,32 +508,16 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
             shuffled_ix = rng.permutation(n)
             estimator.fit(X,y.iloc[shuffled_ix],**fit_params)
             return estimator.feature_importances_
-        return np.array(Parallel(**self.kwargs_Parallel)(delayed(_for_each_reshuffle)(t)
+        null_imp = np.array(Parallel(**self.kwargs_Parallel)(delayed(_for_each_reshuffle)(t)
                                                 for t in range(self.n_resamples)))
-
-
-    def _threshold(self,null_imp):
-        """
-        Computes cutoff for selection/rejection based on null importances. Default
-        is (Q3 + 1.5IQR) of null importances for each features.
-
-        [ For internal use only. Override if necessary. ]
-
-        Parameters
-        ----------
-        null_imp : array of shape (n_reshamples,`n_features_in_`)
-            The array of simulated null importances.
-
-        Returns
-        -------
-        array of shape (`n_features_in_`,)
-            Threshold corresponding to each features.
-
-        """
         self.null_description_ = pd.DataFrame(null_imp,
                                               columns=self.feature_names_in_).describe()
-        _Q1,_Q3 = self.null_description_.loc[['25%','75%']].to_numpy()
-        return 2.5*_Q3 - 1.5*_Q1
+        if self.cutoff is None :
+            _Q1,_Q3 = self.null_description_.loc[['25%','75%']].to_numpy()
+            out = 2.5*_Q3 - 1.5*_Q1
+        else : out = np.quantile(null_imp,self.cutoff,axis=0)
+        self.p_value = np.mean(null_imp>=self.feature_importances_,axis=0)
+        return out
 
 
     def fit(self,X,y,**fit_params):
@@ -549,8 +541,6 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
         """
         X,y = pd.DataFrame(X),pd.Series(y)
-        ## null importances ....
-        imp0_ = self._simulate_null_importances(X,y,**fit_params)
         ## observed importances ....
         if not self.prefit : self.base_estimator.fit(X,y,**fit_params)
         for attribute in ['feature_importances_','feature_names_in_','ranking_',
@@ -558,7 +548,7 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
                           'classes_','n_classes_']:
             setattr(self,attribute,getattr(self.base_estimator,attribute,None))
         ## thresholding ....
-        self.threshold_ = self._threshold(imp0_)
+        self.threshold_ = self._null_importances_AND_threshold(X,y,**fit_params)
         setattr(self.base_estimator,'threshold_',self.threshold_)
         return self
 
@@ -698,6 +688,385 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
                  color=colors,hatch=hatch_patterns,**kwargs)
                 ## in default plots, red: rejected, green: selected , stripe: false +-
         plt.plot(cutoff,color='black',linestyle='dashed')
+        if savefig is not None :
+            if savefig==True :
+                os.makedirs('PLOTs',exist_ok=True)
+                savefig = 'PLOTs'
+            plt.savefig(os.path.join(savefig,
+                                     ascii(self)+f"-{datetime.now().strftime('%Y_%m_%d_%H%M%S%f')}.png"))
+        plt.show()
+
+
+    def get_error_rates(self,true_imp,*,plot=False):
+        """
+        Computes various error-rates when true importance of the features are known.
+
+        Parameters
+        ----------
+        true_imp : array of shape (`n_features_in_`,)
+            If a boolean array , True implies the feature is important in true model, null feature otherwise.
+            If an array of floats , it represent the `feature_importances_` of the true model.
+
+        plot : bool ; default False
+            Whether to plot the `confusion_matrix_for_features_`.
+
+        Returns
+        -------
+        dict
+            Returns the empirical estimate of various error-rates
+           {
+               'PCER': per-comparison error rate ; ``mean`` (`false_discoveries_`),
+
+               'FDR': false discovery rate ; 1 - ``precision`` (`true_support`, `support_`),
+
+               'PFER': per-family error rate ; ``sum`` (`false_discoveries_`),
+
+               'TPR': true positive rate ; ``recall`` (`true_support`, `support_`),
+
+               'n_FalseNegatives': number of false -ve ;  ``sum`` (`false_negatives_`),
+
+               'minModel_size_ratio': maximum rank of important features compared to actual size ; ``max`` (`ranking_` [ `true_support` ]) / ``sum`` (`true_support`),
+
+               'selection_F1': ``F1_score`` (`true_support`, `support_`),
+
+               'selection_YoudenJ': ``sensitivity`` (`true_support`, `support_`) + ``specificity`` (`true_support`, `support_`) - 1
+            }
+
+        """
+        return self.base_estimator.get_error_rates(true_imp,plot=plot)
+
+
+    def dump_to_file(self,file_path=None):
+        """
+        Save this current instance to a specified file location.
+
+        It can be loaded later as follows-
+
+        >>> with open('your_saved_instance.pkl', 'rb') as file:
+        ...:     loaded_instance = joblib.load(file)
+        >>> loaded_instance
+
+        Parameters
+        ----------
+        file_path : "path/to/your_file" with a trailing .pkl
+            The default is None, which will save the file at the current working directory
+            as self-datetime.now().strftime('%Y_%m_%d_%H%M%S%f').pkl
+
+        """
+        if file_path is None :
+            file_path = os.path.join(os.getcwd(),
+                                     ascii(self)+f"-{datetime.now().strftime('%Y_%m_%d_%H%M%S%f')}.pkl")
+        self.base_estimator.dump_to_file(file_path)
+
+
+
+#### ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+from statsmodels.stats.multitest import fdrcorrection
+
+
+
+class MultipleTesting_selection(TransformerMixin,BaseEstimator):
+    """
+        Multiple Hypothesis testing based feature selection. It is the t-test counterpart for categorical response data.
+
+        Key Idea : Decouple (X,y) multiple times by keeping y fixed and shuffling one column of X.
+        Each time evaluate `feature_importances_` with some ``base_estimator``, this will simulate
+        null distribution of `feature_importances_`. Then select features that exceed some
+        upper quantile of null distribution.
+
+        NOTE : Simulating the null distribution is very time consuming.
+
+        Parameters
+        ----------
+        base_estimator : object having ``fit`` method, that provides attribute
+        `feature_importances_` after fitting
+            The base estimator used for feature selection.
+
+        multipletests : {'fdr_bh','fdr_by'} ; default 'fdr_bh'
+            Method used for testing and adjustment of pvalues.
+
+        n_resamples : int ; default 100
+            Number of times the data to be permuted to generate null distribution.
+
+        prefit : bool ; default False
+            Whether the ``base_estimator`` is already fitted or not.
+
+        alpha : float in (0,1) ; default 0.05
+            The FDR level.
+
+        kwargs_Parallel : dict of keyword arguments to ``joblib.Parallel`` ;
+        default ``{'n_jobs':None}``
+
+        random_state : int ; default None
+            Seed for resampling. It will only ensure reproducability of the generated
+            null distribution, and not of any randomness inside `base_estimator`.
+
+
+        Attributes
+        ----------
+        classes_ : array of shape (`n_classes_`,)
+            A list of class labels known to the classifier.
+
+        feature_importances_ : array of shape (n_features,)
+            Importances of features.
+
+        feature_names_in_ : array of shape (n_features`,)
+            Names of features seen during ``fit``.
+
+        features_selected_ : array of shape (`n_features_selected_`,)
+            Names of selected features.
+
+        null_description_ : DataFrame
+            Contains basic descriptive statistics of null distributions,
+            each column corresponds to a feature.
+
+        n_classes_ : int
+            Number of target classes.
+
+        n_features_in_ : int
+            Number of features seen during ``fit``.
+
+        n_features_selected_ : int
+            Number of selected features.
+
+        n_samples_ : int
+            Number of observations seen during ``fit``.
+
+        p_value : array of shape (n_features,)
+            Proportion of null importances atleast as extreme as observed importances for each features.
+
+        p_value_corrected : array of shape (n_features,)
+            p-values corrected for multiple tests.
+
+        ranking_ : array of shape (n_features,)
+            The feature ranking, such that ``ranking_[i]`` corresponds to the
+            i-th best feature, i=1,2,..., n_features.
+
+    """
+    def __init__(self,base_estimator,
+                 n_resamples=100,*,prefit=False,alpha=0.05,multipletests='fdr_bh',
+                 kwargs_Parallel={'n_jobs':None},random_state=None):
+        self.base_estimator = base_estimator
+        self.n_resamples = n_resamples
+        self.prefit = prefit
+        self.alpha = alpha
+        self.multipletests = multipletests
+        self.kwargs_Parallel = kwargs_Parallel
+        self.random_state = random_state
+
+
+    def _null_importances_AND_threshold(self,X,y,**fit_params):
+        """
+        Simulate null importances by resampling.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The training input samples.
+
+        y : Series of shape (n_samples,)
+            The target values.
+
+        **fit_params : other keyword arguments to the ``fit`` method of `base_estimator`.
+
+        Returns
+        -------
+        array of shape (n_features,)
+            Threshold corresponding to each features.
+
+        """
+        n,m = X.shape
+        estimator = clone(self.base_estimator)
+        setattr(estimator,'verbose',0)
+        def _for_each_reshuffle(t):
+            rng = np.random.default_rng(_seed_sum(self.random_state,t))
+            X_ = X.copy()
+            X_.iloc[:,j] = X.iloc[rng.permutation(n),j]
+            estimator.fit(X_,y,**fit_params)
+            return estimator.feature_importances_
+        null_dist_ = pd.DataFrame(index=range(self.n_resamples),columns=range(m))
+        for j in range(m):
+            null_imp = np.array(Parallel(**self.kwargs_Parallel)(delayed(_for_each_reshuffle)(t)
+                                                    for t in range(self.n_resamples)))
+            null_dist_[j] = null_imp[:,j]
+        self.p_value = np.mean(null_dist_.to_numpy()>=self.feature_importances_,axis=0)
+        out_,self.p_value_corrected = fdrcorrection(self.p_value,self.alpha,
+                                                    method={'fdr_bh':'i','fdr_by':'n'}[self.multipletests],
+                                                    is_sorted=False)
+        null_dist_.columns = self.feature_names_in_
+        self.null_description_ = pd.DataFrame(null_dist_).describe()
+        return out_
+
+
+    def fit(self,X,y,**fit_params):
+        """
+        ``fit`` method for ``MultipleTesting_selection``.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The training input samples.
+
+        y : Series of shape (n_samples,)
+            The target values.
+
+        **fit_params : other keyword arguments to the ``fit`` method of `base_estimator`.
+
+        Returns
+        -------
+        self
+            The fitted ``MultipleTesting_selection`` instance is returned.
+
+        """
+        X,y = pd.DataFrame(X),pd.Series(y)
+        ## observed importances ....
+        if not self.prefit : self.base_estimator.fit(X,y,**fit_params)
+        for attribute in ['feature_importances_','feature_names_in_','ranking_',
+                          'n_samples_','n_features_in_',
+                          'classes_','n_classes_']:
+            setattr(self,attribute,getattr(self.base_estimator,attribute,None))
+        ## thresholding ....
+        threshold_ = self._null_importances_AND_threshold(X,y,**fit_params)
+        threshold_ = np.where(threshold_,self.feature_importances_-1e-10,self.feature_importances_)
+            # setting the threshold_=feature_importances_ where support_=False is needed,
+            # and a slightly smaller value otherwise,
+            # since '>' type cutoff is in use
+        setattr(self.base_estimator,'threshold_',threshold_)
+        return self
+
+
+    def get_support(self,indices=False):
+        """
+        Get a mask, or integer index, of the features selected.
+
+        Parameters
+        ----------
+        indices : bool ; default False
+            If True, the return value will be an array of integers, rather than a boolean mask.
+
+        Returns
+        -------
+        array
+            An index that selects the retained features from a feature vector.
+            If indices is False, this is a boolean array of shape [# input features],
+            in which an element is True iff its corresponding feature is selected for retention.
+            If indices is True, this is an integer array of shape [# output features] whose values
+            are indices into the input feature vector.
+
+        """
+        out = self.base_estimator.get_support(indices)
+        self.n_features_selected_ = self.base_estimator.n_features_selected_
+        self.features_selected_ = getattr(self.base_estimator,'features_selected_',None)
+        return out
+
+
+    def transform(self,X):
+        """
+        Reduce X to the selected features.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The input samples to be transformed.
+
+        Returns
+        -------
+        DataFrame of shape (n_samples, n_selected_features)
+            The input samples with only the selected features.
+
+        """
+        out = self.base_estimator.transform(X)
+        self.n_features_selected_ = self.base_estimator.n_features_selected_
+        self.features_selected_ = getattr(self.base_estimator,'features_selected_',None)
+        return out
+
+
+    def fit_transform(self,X,y,**fit_params):
+        """
+        ``fit`` the data (X,y) then ``transform`` X.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_features)
+            The training input samples.
+
+        y : Series of shape (n_samples,)
+            The target values.
+
+        **fit_params : other keyword arguments to ``fit`` method.
+
+        Returns
+        -------
+        DataFrame of shape (n_samples, n_selected_features)
+            The input samples with only the selected features.
+
+        """
+        return self.fit(X,y,**fit_params).transform(X)
+
+
+    def inverse_transform(self,X):
+        """
+        Reverse the transformation operation.
+
+        Parameters
+        ----------
+        X : DataFrame of shape (n_samples, n_selected_features)
+            The input samples with only selected feature-columns.
+
+        Returns
+        -------
+        DataFrame of shape (n_samples, n_features)
+            Columns of zeros inserted where features would have been removed by ``transform()``.
+
+        """
+        return self.base_estimator.inverse_transform(X)
+
+
+    def plot(self,sort=True,savefig=None,*,kind='bar',ax=None,
+             xlabel='features',ylabel=None,title=None,rot=30,color=['green','red'],**kwargs):
+        """
+        Make plot of `feature_importances_`.
+
+        Colour Code :
+
+            color[0](default 'green') is selected,
+            color[1](default 'red') is rejected,
+            (a stripe on colour implies false selection/rejection , when `true_support` is known).
+
+        Parameters
+        ----------
+        sort : bool, default True
+            Whether to sort the features according to `feature_importances_` before plotting.
+
+        savefig : "directory/for/saving/your_plot"
+            default None, implies plot will not be saved. True will save the plot inside a folder PLOTs at the current working directory.
+            The plot will be saved as self.-datetime.now().strftime('%Y_%m_%d_%H%M%S%f').png
+
+        kind, ax, xlabel, ylabel, title, rot, color, **kwargs : keyword arguments to pass to matplotlib plotting method.
+
+        """
+        support_ = self.get_support()
+        if self.feature_names_in_ is None :
+            ix = (np.vectorize(lambda j:"X_"+str(j)))(range(self.n_features_in_))
+        else : ix = self.feature_names_in_
+        if ylabel is None :
+            ylabel = 'MultiTesting_'+ascii(self.base_estimator)
+        if title is None :
+            title = "selected : " + str(self.n_features_selected_) +"/" + str(self.n_features_in_)
+        imp = pd.Series(self.feature_importances_,index=ix)
+        colors = np.array([(color[0] if val else color[1]) for val in support_])
+        truth_known = hasattr(self.base_estimator,'true_support')
+        if truth_known :
+            hatch_patterns = np.array([('/' if val else None) for val in (self.base_estimator.true_support!=support_)])
+        else : hatch_patterns = np.array([None]*self.n_features_in_)
+        if sort :
+            sort_ix = np.argsort(-self.feature_importances_)
+            imp = imp.iloc[sort_ix]
+            hatch_patterns = hatch_patterns[sort_ix]
+        imp.plot(kind=kind,ax=ax,xlabel=xlabel,ylabel=ylabel,title=title,rot=rot,
+                 color=colors,hatch=hatch_patterns,**kwargs)
+                ## in default plots, red: rejected, green: selected , stripe: false +-
         if savefig is not None :
             if savefig==True :
                 os.makedirs('PLOTs',exist_ok=True)
