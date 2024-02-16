@@ -378,6 +378,7 @@ class BCT_selection(TransformerMixin,BaseEstimator):
 
 from joblib import Parallel, delayed
 from sklearn.base import clone
+from statsmodels.stats.multitest import multipletests
 from ._utils._rng import _seed_sum
 
 
@@ -409,9 +410,12 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         prefit : bool ; default False
             Whether the ``base_estimator`` is already fitted or not.
 
-        cutoff : float in (0,1) ; default None
-            The quantile of null distribution to be used for selection/rejection.
-            If not specified Q3+1.5IQR will be used.
+        alpha : float in (0,1) ; default 0.05
+            The level of control.
+
+        multipletests : {'bonferroni','sidak','fdr_bh','fdr_by',None} ; default None
+            Method used for testing and adjustment of pvalues in ``statsmodels.stats.multitest``.
+            If None individual tests will be performed at level `alpha`.
 
         kwargs_Parallel : dict of keyword arguments to ``joblib.Parallel`` ;
         default ``{'n_jobs':None}``
@@ -454,14 +458,12 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         p_value : array of shape (`n_features_in_`,)
             Proportion of null importances atleast as extreme as observed importances for each features.
 
+        p_value_corrected : array of shape (n_features,)
+            p-values corrected for multiple tests.
+
         ranking_ : array of shape (`n_features_in_`,)
             The feature ranking, such that ``ranking_[i]`` corresponds to the
             i-th best feature, i=1,2,..., `n_features_in_`.
-
-        threshold_ : array of shape (`n_features_in_`)
-            The cutoff in use. Any feature with importance exceeding this value
-            will be selected, otherwise will be rejected.
-
 
         References
         ----------
@@ -470,12 +472,13 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
     """
     def __init__(self,base_estimator,
-                 n_resamples=100,*,prefit=False,cutoff=None,
+                 n_resamples=100,*,prefit=False,alpha=0.05,multipletests=None,
                  kwargs_Parallel={'n_jobs':None},random_state=None):
         self.base_estimator = base_estimator
         self.n_resamples = n_resamples
         self.prefit = prefit
-        self.cutoff = cutoff
+        self.alpha = alpha
+        self.multipletests = multipletests
         self.kwargs_Parallel = kwargs_Parallel
         self.random_state = random_state
 
@@ -512,12 +515,14 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
                                                 for t in range(self.n_resamples)))
         self.null_description_ = pd.DataFrame(null_imp,
                                               columns=self.feature_names_in_).describe()
-        if self.cutoff is None :
-            _Q1,_Q3 = self.null_description_.loc[['25%','75%']].to_numpy()
-            out = 2.5*_Q3 - 1.5*_Q1
-        else : out = np.quantile(null_imp,self.cutoff,axis=0)
         self.p_value = np.mean(null_imp>=self.feature_importances_,axis=0)
-        return out
+        if self.multipletests is None :
+            out_ = np.where(self.p_value<=self.alpha,True,False)
+        else :
+            out_,self.p_value_corrected = multipletests(self.p_value,self.alpha,
+                                                   method=self.multipletests,
+                                                   is_sorted=False)[:2]
+        return out_
 
 
     def fit(self,X,y,**fit_params):
@@ -548,8 +553,12 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
                           'classes_','n_classes_']:
             setattr(self,attribute,getattr(self.base_estimator,attribute,None))
         ## thresholding ....
-        self.threshold_ = self._null_importances_AND_threshold(X,y,**fit_params)
-        setattr(self.base_estimator,'threshold_',self.threshold_)
+        support_ = self._null_importances_AND_threshold(X,y,**fit_params)
+        setattr(self.base_estimator,'threshold_',
+                np.where(support_,self.feature_importances_-1e-10,self.feature_importances_))
+            # setting the threshold_=feature_importances_ where support_=False is needed,
+            # and a slightly smaller value otherwise,
+            # since '>' type cutoff is in use
         return self
 
 
@@ -672,7 +681,6 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         if title is None :
             title = "selected : " + str(self.n_features_selected_) +"/" + str(self.n_features_in_)
         imp = pd.Series(self.feature_importances_,index=ix)
-        cutoff = self.threshold_
         colors = np.array([(color[0] if val else color[1]) for val in support_])
         truth_known = hasattr(self.base_estimator,'true_support')
         if truth_known :
@@ -681,13 +689,11 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
         if sort :
             sort_ix = np.argsort(-self.feature_importances_)
             imp = imp.iloc[sort_ix]
-            cutoff = cutoff[sort_ix]
             colors = colors[sort_ix]
             hatch_patterns = hatch_patterns[sort_ix]
         imp.plot(kind=kind,ax=ax,xlabel=xlabel,ylabel=ylabel,title=title,rot=rot,
                  color=colors,hatch=hatch_patterns,**kwargs)
                 ## in default plots, red: rejected, green: selected , stripe: false +-
-        plt.plot(cutoff,color='black',linestyle='dashed')
         if savefig is not None :
             if savefig==True :
                 os.makedirs('PLOTs',exist_ok=True)
@@ -760,9 +766,14 @@ class PIMP_selection(TransformerMixin,BaseEstimator):
 
 
 
-#### ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#### ==========================================================================
+##
+###
+####
+###
+##
+##### Multiple Testing ========================================================
 
-from statsmodels.stats.multitest import fdrcorrection
 
 
 
@@ -783,9 +794,6 @@ class MultipleTesting_selection(TransformerMixin,BaseEstimator):
         `feature_importances_` after fitting
             The base estimator used for feature selection.
 
-        multipletests : {'fdr_bh','fdr_by'} ; default 'fdr_bh'
-            Method used for testing and adjustment of pvalues.
-
         n_resamples : int ; default 100
             Number of times the data to be permuted to generate null distribution.
 
@@ -793,7 +801,11 @@ class MultipleTesting_selection(TransformerMixin,BaseEstimator):
             Whether the ``base_estimator`` is already fitted or not.
 
         alpha : float in (0,1) ; default 0.05
-            The FDR level.
+            The level of control.
+
+        multipletests : {'bonferroni','sidak','fdr_bh','fdr_by',None} ; default None
+            Method used for testing and adjustment of pvalues in ``statsmodels.stats.multitest``.
+            If None individual tests will be performed at level `alpha`.
 
         kwargs_Parallel : dict of keyword arguments to ``joblib.Parallel`` ;
         default ``{'n_jobs':None}``
@@ -845,7 +857,7 @@ class MultipleTesting_selection(TransformerMixin,BaseEstimator):
 
     """
     def __init__(self,base_estimator,
-                 n_resamples=100,*,prefit=False,alpha=0.05,multipletests='fdr_bh',
+                 n_resamples=100,*,prefit=False,alpha=0.05,multipletests=None,
                  kwargs_Parallel={'n_jobs':None},random_state=None):
         self.base_estimator = base_estimator
         self.n_resamples = n_resamples
@@ -891,9 +903,12 @@ class MultipleTesting_selection(TransformerMixin,BaseEstimator):
                                                     for t in range(self.n_resamples)))
             null_dist_[j] = null_imp[:,j]
         self.p_value = np.mean(null_dist_.to_numpy()>=self.feature_importances_,axis=0)
-        out_,self.p_value_corrected = fdrcorrection(self.p_value,self.alpha,
-                                                    method={'fdr_bh':'i','fdr_by':'n'}[self.multipletests],
-                                                    is_sorted=False)
+        if self.multipletests is None :
+            out_ = np.where(self.p_value<=self.alpha,True,False)
+        else :
+            out_,self.p_value_corrected = multipletests(self.p_value,self.alpha,
+                                                   method=self.multipletests,
+                                                   is_sorted=False)[:2]
         null_dist_.columns = self.feature_names_in_
         self.null_description_ = pd.DataFrame(null_dist_).describe()
         return out_
@@ -927,12 +942,12 @@ class MultipleTesting_selection(TransformerMixin,BaseEstimator):
                           'classes_','n_classes_']:
             setattr(self,attribute,getattr(self.base_estimator,attribute,None))
         ## thresholding ....
-        threshold_ = self._null_importances_AND_threshold(X,y,**fit_params)
-        threshold_ = np.where(threshold_,self.feature_importances_-1e-10,self.feature_importances_)
+        support_ = self._null_importances_AND_threshold(X,y,**fit_params)
+        setattr(self.base_estimator,'threshold_',
+                np.where(support_,self.feature_importances_-1e-10,self.feature_importances_))
             # setting the threshold_=feature_importances_ where support_=False is needed,
             # and a slightly smaller value otherwise,
             # since '>' type cutoff is in use
-        setattr(self.base_estimator,'threshold_',threshold_)
         return self
 
 
@@ -1063,6 +1078,7 @@ class MultipleTesting_selection(TransformerMixin,BaseEstimator):
         if sort :
             sort_ix = np.argsort(-self.feature_importances_)
             imp = imp.iloc[sort_ix]
+            colors[sort_ix]
             hatch_patterns = hatch_patterns[sort_ix]
         imp.plot(kind=kind,ax=ax,xlabel=xlabel,ylabel=ylabel,title=title,rot=rot,
                  color=colors,hatch=hatch_patterns,**kwargs)
