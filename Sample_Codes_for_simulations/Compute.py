@@ -59,6 +59,7 @@ Truth = [True]*a + [False]*(m-a)
 from Cat_Select_101.LASSO_based_Methods import vanillaLASSO_importance,L1SVM_importance
 from Cat_Select_101.nonparametric_Methods import Independence_Screening
 from Cat_Select_101.other_PenalizedRegressions import discriminative_LeastSquares
+from sklearn.base import clone
 
 
 METHODs = {'lasso':vanillaLASSO_importance(multi_class='multinomial',Cs=[1e-2,1e-1,1.,1e+1,1e+2],random_state=101),
@@ -91,7 +92,7 @@ def COMPUTE(METHODs):
             X,y = X.iloc[:n],y.iloc[:n]
             X_test,y_test = test_DATA[itr][f'm_{m}'][f'a_{a}']
             ## Base Method ....
-            Selector = value
+            Selector = clone(value)
             Selector.fit(X,y)
             Estimators = {'logi_':LogisticRegression(penalty=None),
                           'knn_':KNeighborsClassifier(n_neighbors=int(np.sqrt(n)))}
