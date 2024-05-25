@@ -18,6 +18,8 @@ sigma for different features, we will have Weighted LASSO.
 
 
 @author: R.Nandi
+
+COMMENT for future use: Not stable when weights are near 0. Subject to improvement.
 """
 
 
