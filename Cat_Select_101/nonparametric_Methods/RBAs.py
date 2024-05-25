@@ -4,6 +4,9 @@ Created on Sat Feb  3 16:52:18 2024
 Topic: Relief based feature selection algorithms.
 
 @author: R.Nandi
+
+COMMENT for future use: This script is subject to improvement.
+
 """
 
 
