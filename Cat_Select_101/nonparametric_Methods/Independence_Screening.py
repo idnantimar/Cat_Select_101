@@ -6,6 +6,9 @@ Topic: Usually variable selection methods rely on the coefficients in some param
        This methods can specially work well for misspecified models.
 
 @author: R.Nandi
+
+COMMENT for future use: ``SIScat_importance`` was just tried out of my intuition. Not verified.
+
 """
 
 
