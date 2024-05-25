@@ -18,7 +18,7 @@ Case:
 
 # working dir & useful Modules ..........................
 import os
-os.chdir("E:\SIMULATIONs\Simulation004_5Apr")
+os.chdir("E:\SIMULATIONs\Simulation001_5Apr")
 from sys import path
 path.append("E:\\")
 
@@ -134,55 +134,6 @@ dump_to_file(test_DATA,'test_DATA')
 
 ## ============================================================================
 
-from sklearn.linear_model import LogisticRegression
-model = LogisticRegression(penalty=None)
-
-
-X,y = DATA[6]['m_100']['a_10']
-X,y = X.iloc[:256,:],y.iloc[:256]
-X_,y_ = test_DATA[0]['m_100']['a_10']
-np.unique(y,return_counts=True)
-generate_Categorical._softmax(X.to_numpy(),Beta(10,100),np.zeros(3))
-
-
-import pandas as pd
-S=pd.Series(index=[4,6,8,10,15,25,40,60,80,100])
-
-model.fit(X,y)
-S[100]=model.score(X_,y_)
-
-model.fit(X.iloc[:,:10],y)
-S[10]=model.score(X_.iloc[:,:10],y_)
-
-model.fit(X.iloc[:,:15],y)
-S[15]=model.score(X_.iloc[:,:15],y_)
-
-model.fit(X.iloc[:,:25],y)
-S[25]=model.score(X_.iloc[:,:25],y_)
-
-model.fit(X.iloc[:,:40],y)
-S[40]=model.score(X_.iloc[:,:40],y_)
-
-model.fit(X.iloc[:,:60],y)
-S[60]=model.score(X_.iloc[:,:60],y_)
-
-model.fit(X.iloc[:,:80],y)
-S[80]=model.score(X_.iloc[:,:80],y_)
-
-model.fit(X.iloc[:,:4],y)
-S[4]=model.score(X_.iloc[:,:4],y_)
-
-model.fit(X.iloc[:,:6],y)
-S[6]=model.score(X_.iloc[:,:6],y_)
-
-model.fit(X.iloc[:,:8],y)
-S[8]=model.score(X_.iloc[:,:8],y_)
-
-
-## ============================================================================
-
-T = pd.DataFrame()
-T['rep1'] = S
 
 
 
