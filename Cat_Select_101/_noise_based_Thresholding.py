@@ -6,6 +6,9 @@ Topic: Sometimes it is difficult to determine the raw cutoff for variable select
        Then all those original features having more importance than noise features will be selected.
 
 @author: R.Nandi
+
+COMMENT for future use: ``MultipleTesting_selection`` was just tried out of my intuition. Not verified.
+
 """
 
 
