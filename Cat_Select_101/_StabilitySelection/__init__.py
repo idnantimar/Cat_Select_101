@@ -14,6 +14,9 @@ support for multiple tau values at a time, to avoid redundant calculations.
 
 
 @author: R.Nandi
+
+COMMENT for future use: The crossvalidation over different penalty values part in ``fit`` is subject to improvement.
+
 """
 
 
