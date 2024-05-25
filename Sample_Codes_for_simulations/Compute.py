@@ -6,15 +6,15 @@ Topic: Simulation
 @author: R.Nandi
 """
 
-m,a,n = (60,
-         10,
+m,a,n = (100,
+         40,
          256)
 n_itr = 24
 n_resampling = 100
 
 # working dir & useful Modules ..........................
 import os
-os.chdir(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-060-10-0256")
+os.chdir(r"E:\SIMULATIONs\Simulation001_5Apr\CASEs\case-100-40-0256")
 
 
 from sys import path
@@ -43,10 +43,10 @@ def dump_to_file(obj,name):
 ## Collecting Data =================================================
 
 
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\DATA-2024_04_08_210606435114.pkl", 'rb') as file:
+with open(r"E:\SIMULATIONs\Simulation001_5Apr\DATA-2024_04_08_210606435114.pkl", 'rb') as file:
     DATA = joblib.load(file)
 
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\test_DATA-2024_04_08_210611896262.pkl", 'rb') as file:
+with open(r"E:\SIMULATIONs\Simulation001_5Apr\test_DATA-2024_04_08_210611896262.pkl", 'rb') as file:
     test_DATA = joblib.load(file)
 
 Truth = [True]*a + [False]*(m-a)
@@ -183,4 +183,6 @@ dump_to_file(SCOREs_PIMP,'SCOREs_PIMP')
 
 
 ## =============================================================
+
+
 
