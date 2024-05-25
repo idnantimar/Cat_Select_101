@@ -7,7 +7,7 @@ Topic: Effect of Sample Sizes
 
 # working dir & useful Modules ..........................
 import os
-os.chdir("E:\SIMULATIONs\Simulation004_5Apr\COMPARISONs\Comparison_01")
+os.chdir("E:\SIMULATIONs\Simulation001_5Apr\COMPARISONs\Comparison_01")
 from sys import path
 path.append("E:\\")
 
@@ -59,15 +59,16 @@ def Plotting0(B):
 
 
 IMPORTANCEs = {}
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0128\IMPORTANCEs-2024_04_09_004109662254.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation001_5Apr\CASEs\case-100-10-0128\IMPORTANCEs-2024_04_09_004109662254.pkl",'rb') as file :
     IMPORTANCEs['n_128'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0256\IMPORTANCEs-2024_04_09_001201302336.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation001_5Apr\CASEs\case-100-10-0256\IMPORTANCEs-2024_04_09_001201302336.pkl",'rb') as file :
     IMPORTANCEs['n_256'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0512\IMPORTANCEs-2024_04_09_011510485213.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation001_5Apr\CASEs\case-100-10-0512\IMPORTANCEs-2024_04_09_011510485213.pkl",'rb') as file :
     IMPORTANCEs['n_512'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-1024\IMPORTANCEs-2024_04_09_022540679924.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation001_5Apr\CASEs\case-100-10-1024\IMPORTANCEs-2024_04_09_022540679924.pkl",'rb') as file :
     IMPORTANCEs['n_1024'] = joblib.load(file)
 
+column_names = ['f_0'+str(j) for j in range(1,10)]+['f_'+str(j) for j in range(10,a+1)]
 
 def Plotting1(METHODs):
     for size in sample_sizes:
@@ -75,26 +76,55 @@ def Plotting1(METHODs):
         for key,value in METHODs.items():
             Imp_ = IMPORTANCEs[f'n_{size}'][key]
             Imp_ = 100*Imp_.div(np.sum(Imp_,axis=1),axis=0)
-            Imp_.columns = ['f_'+str(j) for j in range(m)]
-            Imp_['max_null'] = np.max(Imp_[['f_'+str(j) for j in range(a,m)]],axis=1)
-            Imp_ = Imp_.drop(columns=['f_'+str(j) for j in range(a,m)])
+            Imp_['max_null'] = np.max(Imp_.iloc[:,a:],axis=1)
+            Imp_ = Imp_.drop(columns=range(a,m))
             Imp_['method'] = key
             Imp += [Imp_]
         Imp = pd.concat(Imp)
+        Imp.columns = column_names + list(Imp.columns[a:])
         axes = Imp.boxplot(by='method',layout=(1,a+1),figsize = (20,5),grid=False,rot=30)
         plt.suptitle(f'feature importances | #samples:{size}')
         for t,truth in enumerate(np.array([True]*a+[False],dtype=str)): axes[t].set_xlabel(truth)
         plt.show()
 
+def Plotting1b(METHODs):
+    Imp_diff = pd.DataFrame(index=METHODs,columns=sample_sizes)
+    for size in sample_sizes:
+        for key,value in METHODs.items():
+            Imp_ = IMPORTANCEs[f'n_{size}'][key]
+            Imp_ = 100*Imp_.div(np.sum(Imp_,axis=1),axis=0)
+            max_null = np.max(Imp_.iloc[:,a:],axis=1)
+            min_active = np.min(Imp_.iloc[:,:a],axis=1)
+            Imp_diff.loc[key,size] = np.median(min_active-max_null)
+
+    bar_width = 0.06
+    r1 = np.arange(len(sample_sizes))
+    r2 = [x + bar_width for x in r1]
+    r3 = [x + bar_width for x in r2]
+    r4 = [x + bar_width for x in r3]
+    fig, ax = plt.subplots()
+    ax.bar(r1, Imp_diff.iloc[0,:], color='b', width=bar_width, edgecolor='grey', label=list(METHODs.keys())[0])
+    ax.bar(r2, Imp_diff.iloc[1,:], color='orange', width=bar_width, edgecolor='grey', label=list(METHODs.keys())[1])
+    ax.bar(r3, Imp_diff.iloc[2,:], color='g', width=bar_width, edgecolor='grey', label=list(METHODs.keys())[2])
+    ax.bar(r4, Imp_diff.iloc[3,:], color='r', width=bar_width, edgecolor='grey', label=list(METHODs.keys())[3])
+    ax.set_xlabel('sample sizes')
+    ax.set_ylabel('min_active - max_null')
+    ax.set_xticks([r + bar_width/2 for r in range(len(sample_sizes))])
+    ax.set_xticklabels(sample_sizes)
+    ax.legend()
+    ax.axhline(0, color='black',linewidth=0.5)
+    plt.show()
+
+
 
 CHECKs = {}
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0128\CHECKs_PIMP-2024_04_09_004109677883.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-0128\CHECKs-2024_05_17_162528138224.pkl",'rb') as file :
     CHECKs['n_128'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0256\CHECKs_PIMP-2024_04_09_001201317957.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-0256\CHECKs-2024_05_17_162721749533.pkl",'rb') as file :
     CHECKs['n_256'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0512\CHECKs_PIMP-2024_04_09_011510510805.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-0512\CHECKs-2024_05_17_163233400708.pkl",'rb') as file :
     CHECKs['n_512'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-1024\CHECKs_PIMP-2024_04_09_022540695298.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-1024\CHECKs-2024_05_17_175104094104.pkl",'rb') as file :
     CHECKs['n_1024'] = joblib.load(file)
 
 
@@ -140,13 +170,13 @@ def Plotting2(METHODs):
 
 
 SCOREs = {}
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0128\SCOREs_PIMP-2024_04_09_004109677883.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-0128\SCOREs-2024_05_17_162528138224.pkl",'rb') as file :
     SCOREs['n_128'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0256\SCOREs_PIMP-2024_04_09_001201333616.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-0256\SCOREs-2024_05_17_162721749533.pkl",'rb') as file :
     SCOREs['n_256'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-0512\SCOREs_PIMP-2024_04_09_011510514799.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-0512\SCOREs-2024_05_17_163233400708.pkl",'rb') as file :
     SCOREs['n_512'] = joblib.load(file)
-with open(r"E:\SIMULATIONs\Simulation004_5Apr\CASEs\case-100-10-1024\SCOREs_PIMP-2024_04_09_022540695298.pkl",'rb') as file :
+with open(r"E:\SIMULATIONs\Simulation000_8Feb\case-5-3-1024\SCOREs-2024_05_17_175104094104.pkl",'rb') as file :
     SCOREs['n_1024'] = joblib.load(file)
 
 
